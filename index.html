@@ -37,9 +37,25 @@
         .base-label.alg-label { color: #ff5555; }
         .base-label.mor-label { color: #55ff55; }
         .base-label.spa-label { color: #ff55ff; }
-    </style>
+    
+        .target-crosshair { animation: spin 4s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
 </head>
 <body>
+
+    <!-- Briefing Modal -->
+    <div id="briefing-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; background: rgba(5,5,5,0.95); border: 2px solid #0f0; z-index: 9999; padding: 25px; color: #fff; font-family: 'Courier New', monospace; box-shadow: 0 0 30px rgba(0,255,31,0.4); backdrop-filter: blur(5px);">
+        <h2 style="color: #0f0; text-align: center; border-bottom: 1px dashed #0f0; padding-bottom: 10px; margin-top: 0; letter-spacing: 2px;">[ MISSION BRIEFING ]</h2>
+        <p style="color: #ddd; font-size: 14px; text-align: center;">Welcome to the OSINT Command Center.</p>
+        <ul style="color: #aaa; font-size: 13px; line-height: 1.8; padding-left: 20px;">
+            <li><strong style="color: #0f0;">COMMAND TERMINAL:</strong> Use the sidebar terminal to search for specific bases (e.g., "Tindouf") or paste raw GPS coordinates to drop a targeting crosshair.</li>
+            <li><strong style="color: #0f0;">COORDINATE EXTRACTION:</strong> Right-click anywhere on the map to instantly copy exact geographic coordinates to your clipboard.</li>
+            <li><strong style="color: #0f0;">LIVE TERMINATOR:</strong> Enable the Terminator layer to track the live Day/Night shadow moving across the Sahara in real-time.</li>
+        </ul>
+        <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
+    </div>
+
 
     <div id="sidebar">
         <h1 style='text-align: center;'>[Top Secret] GeoINT</h1>
@@ -57,6 +73,13 @@
                 <option value="bing">BING SATELLITE</option>
                 <option value="topo">TOPOGRAPHIC MAP</option>
             </select>
+        </div>
+        
+        
+        <h2>Command Terminal</h2>
+        <div style="background: #000; border: 1px solid #0f0; padding: 5px; font-family: 'Courier New', monospace; margin-bottom: 15px; position: relative; box-shadow: 0 0 5px #0f0;">
+            <span style="color: #0f0; position: absolute; left: 8px; top: 7px;">></span>
+            <input type="text" id="cmd-terminal" placeholder="Search Asset or Paste GPS..." style="width: 100%; background: transparent; color: #0f0; border: none; outline: none; padding-left: 15px; font-family: 'Courier New', monospace; font-size: 11px;" onkeypress="handleTerminal(event)">
         </div>
         
         <h2>Doctrine Analysis</h2>
@@ -91,7 +114,13 @@
         <div class="control-group">
             <label><input type="checkbox" id="layer-sam-threat" checked> <span class="legend-color" style="background:transparent; border:1px solid #f00; border-radius:50%"></span>Show Verified SAM Rings</label>
         </div>
-    </div>
+          <div class="control-group" style="margin-top: 10px;">
+              <label><input type="checkbox" id="layer-terminator" checked> <span class="legend-color" style="background:rgba(0,0,0,0.8); border:1px solid #555;"></span>Live Terminator Line (Night)</label>
+          </div>
+          <div class="control-group" style="margin-top: 10px;">
+              <label><input type="checkbox" id="layer-labels" checked> <span class="legend-color" style="background:transparent; border:1px dashed #fff;"></span>Map Borders & City Labels</label>
+          </div>
+      </div>
 
     <!-- Hardware Dossier -->
     <div id="dossier-panel">
@@ -113,7 +142,8 @@
     <div class="hud-overlay pulse" style="color:#0f0; font-size:12px; font-weight:bold; text-shadow: 0 0 5px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="map_data.js"></script>
+    <script src="https://unpkg.com/@joergdietrich/leaflet.terminator"></script>
+      <script src="map_data.js"></script>
     
     <script>
         const map = L.map('map', { zoomControl: false }).setView([28.0, -5.0], 6);
@@ -203,7 +233,128 @@
             losLayer.clearLayers();
         }
 
+
+        // -------------------------
+        // FEATURE: TERMINATOR LINE
+        // -------------------------
+        
+        // -------------------------
+        // FEATURE: BORDERS & LABELS
+        // -------------------------
+        let labelsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'markerPane', // Ensures labels stay on top of the satellite imagery
+            zIndex: 400
+        }).addTo(map);
+
+        document.getElementById('layer-labels').addEventListener('change', function(e) {
+            if(e.target.checked) map.addLayer(labelsLayer);
+            else map.removeLayer(labelsLayer);
+        });
+        
+        let terminator = L.terminator().addTo(map);
+        setInterval(function(){
+            terminator.setTime();
+        }, 60000); // Update every minute
+        
+        document.getElementById('layer-terminator').addEventListener('change', function(e) {
+            if(e.target.checked) map.addLayer(terminator);
+            else map.removeLayer(terminator);
+        });
+
+
+        // -------------------------
+        // FEATURE: COORDINATE EXTRACTION (RIGHT-CLICK)
+        // -------------------------
+        map.on('contextmenu', function(e) {
+            let lat = e.latlng.lat.toFixed(5);
+            let lng = e.latlng.lng.toFixed(5);
+            let coordString = `${lat}, ${lng}`;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(coordString).then(() => {
+                // Show a quick popup
+                L.popup({ className: 'custom-popup' })
+                    .setLatLng(e.latlng)
+                    .setContent(`<div style="text-align:center; color:#0f0; font-weight:bold; font-family:'Courier New'; border:1px solid #0f0; padding:5px; background:#000;">TARGET ACQUIRED<br>${coordString}<br><span style="font-size:9px; color:#fff;">COPIED TO CLIPBOARD</span></div>`)
+                    .openOn(map);
+            });
+        });
+
+        // -------------------------
+        // FEATURE: COMMAND TERMINAL
+
+        // -------------------------
+        let targetCrosshair = null;
+
+        function handleTerminal(e) {
+            if (e.key === 'Enter') {
+                let val = e.target.value.trim();
+                if (!val) return;
+                
+                // Check if it's coordinates (e.g. 27.123, -10.456)
+                let coordMatch = val.match(/^(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)$/);
+                if (coordMatch) {
+                    let lat = parseFloat(coordMatch[1]);
+                    let lng = parseFloat(coordMatch[3]);
+                    executeCoordinateDrop(lat, lng);
+                } else {
+                    executeAssetSearch(val.toLowerCase());
+                }
+                
+                e.target.value = '';
+            }
+        }
+
+        function executeCoordinateDrop(lat, lng) {
+            map.flyTo([lat, lng], 12, { animate: true, duration: 2 });
+            
+            if (targetCrosshair) map.removeLayer(targetCrosshair);
+            
+            // Draw a cool targeting crosshair
+            let icon = L.divIcon({
+                className: 'target-crosshair',
+                html: '<div style="width: 40px; height: 40px; border: 2px solid #f00; border-radius: 50%; position: relative;"><div style="position: absolute; top: 19px; left: -10px; width: 60px; height: 2px; background: #f00;"></div><div style="position: absolute; top: -10px; left: 19px; width: 2px; height: 60px; background: #f00;"></div></div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+            targetCrosshair = L.marker([lat, lng], {icon: icon}).addTo(map);
+            
+            // Remove it after 10 seconds
+            setTimeout(() => {
+                if (targetCrosshair) map.removeLayer(targetCrosshair);
+            }, 10000);
+        }
+
+        function executeAssetSearch(query) {
+            let allFeatures = [];
+            if(document.getElementById('layer-morocco').checked) allFeatures = allFeatures.concat(moroccoData.features);
+            if(document.getElementById('layer-algeria').checked) allFeatures = allFeatures.concat(algeriaData.features);
+            
+            let bestMatch = null;
+            
+            for (let f of allFeatures) {
+                if (f.properties && f.properties.name && f.properties.name.toLowerCase().includes(query)) {
+                    bestMatch = f;
+                    break;
+                }
+            }
+            
+            if (bestMatch && bestMatch.geometry.type === 'Point') {
+                let lat = bestMatch.geometry.coordinates[1];
+                let lng = bestMatch.geometry.coordinates[0];
+                map.flyTo([lat, lng], 14, { animate: true, duration: 2 });
+                
+                // Simulate clicking it to open dossier
+                setTimeout(() => {
+                    openDossier(bestMatch.properties.name, getType(bestMatch), 'SEARCH RESULT', [lat, lng]);
+                }, 2200);
+            } else {
+                alert('ASSET NOT FOUND OR NOT CURRENTLY VISIBLE ON ACTIVE LAYERS.');
+            }
+        }
+
         function runLineOfSight() {
+
             if(!currentAsset) return;
             losLayer.clearLayers();
             L.circle(currentAsset, {
