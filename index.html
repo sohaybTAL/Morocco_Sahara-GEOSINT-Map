@@ -49,6 +49,16 @@
             <span style="font-size: 12px;">MOROCCO SAHARA GEOINT</span>
         </div>
         
+                <h2>Satellite Feed</h2>
+        <div class="control-group" style="padding-bottom: 15px;">
+            <select id="sat-provider" style="width: 100%; background: #111; color: #0f0; border: 1px solid #333; padding: 5px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer; outline: none;">
+                <option value="esri">ESRI SATELLITE (DEFAULT)</option>
+                <option value="google">GOOGLE SATELLITE</option>
+                <option value="bing">BING SATELLITE</option>
+                <option value="topo">TOPOGRAPHIC MAP</option>
+            </select>
+        </div>
+        
         <h2>Doctrine Analysis</h2>
         <div class="stat-box alg">
             <strong>ALGERIA: MISSILE UMBRELLA</strong><br>SAM Sites: 32<br>Radars: 32
@@ -109,9 +119,41 @@
         const map = L.map('map', { zoomControl: false }).setView([28.0, -5.0], 6);
         L.control.zoom({ position: 'topleft' }).addTo(map);
 
-        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Esri, Maxar', maxZoom: 18
-        }).addTo(map);
+                // Bing QuadKey implementation
+        L.TileLayer.Bing = L.TileLayer.extend({
+            getTileUrl: function(coords) {
+                let quadkey = '';
+                for (let i = coords.z; i > 0; i--) {
+                    let digit = 0;
+                    let mask = 1 << (i - 1);
+                    if ((coords.x & mask) !== 0) digit += 1;
+                    if ((coords.y & mask) !== 0) digit += 2;
+                    quadkey += digit;
+                }
+                return 'https://ecn.t3.tiles.virtualearth.net/tiles/a' + quadkey + '.jpeg?g=1';
+            }
+        });
+
+        const providers = {
+            esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri', maxZoom: 18 }),
+            google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20 }),
+            bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19 }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17 })
+        };
+        
+        let currentProvider = providers.esri;
+        currentProvider.addTo(map);
+
+        document.getElementById('sat-provider').addEventListener('change', function(e) {
+            map.removeLayer(currentProvider);
+            currentProvider = providers[e.target.value];
+            currentProvider.addTo(map);
+            // Re-add the LOS layer if it has anything on it to ensure it stays on top!
+            if (map.hasLayer(losLayer)) {
+                map.removeLayer(losLayer);
+                losLayer.addTo(map);
+            }
+        });
 
         const moroccoLayer = L.layerGroup().addTo(map);
         const algeriaLayer = L.layerGroup().addTo(map);
