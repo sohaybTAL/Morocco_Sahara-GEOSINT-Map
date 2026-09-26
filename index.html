@@ -448,7 +448,7 @@
                 if(document.getElementById('layer-morocco').checked) {
                     L.geoJSON(filterFeatures(datMor.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#00ff1f'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: '#00ff1f', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#00ff1f', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
                     }).addTo(moroccoLayer);
                 }
@@ -456,7 +456,7 @@
                 if(document.getElementById('layer-algeria').checked) {
                     L.geoJSON(filterFeatures(datAlg.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ff0000'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: '#ff0000', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ff0000', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
                     }).addTo(algeriaLayer);
                 }
@@ -464,7 +464,7 @@
                 if(document.getElementById('layer-spain').checked) {
                     L.geoJSON(filterFeatures(datSpa.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ff00ff'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: '#ff00ff', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ff00ff', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
                     }).addTo(spainLayer);
                 }
@@ -472,7 +472,7 @@
                 if(document.getElementById('layer-mauritania').checked) {
                     L.geoJSON(filterFeatures(datMau.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ffff00'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: '#ffff00', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ffff00', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
                     }).addTo(mauritaniaLayer);
                 }
