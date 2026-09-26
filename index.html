@@ -232,6 +232,9 @@
                 function filterFeatures(features) {
                     let out = [];
                     features.forEach(f => {
+                        // Skip native polygons (hardcoded circles) so they don't duplicate our dynamic threat rings
+                        if(f.geometry.type === 'Polygon') return; 
+                        
                         let t = getType(f);
                         if(t === 'INSTALLATION' || activeTypes.includes(t)) {
                             out.push(f);
