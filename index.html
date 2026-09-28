@@ -433,7 +433,7 @@
         }
 
         function bindData(f, l, color, country) {
-            let name = f.properties.name || "UNNAMED ASSET";
+            let name = f.properties.name || "";
             let type = getType(f);
             
             if(f.geometry.type === 'Point') {
@@ -442,8 +442,11 @@
                 if(country === 'MOROCCO') labelClass += ' mor-label';
                 if(country === 'SPAIN') labelClass += ' spa-label';
                 
-                l.bindTooltip(name, {permanent: true, direction: 'right', className: labelClass, offset: [5, 0]});
-                l.on('click', () => openDossier(name, type, country, [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+                // Only show permanent label if asset has a real name
+                if(name) {
+                    l.bindTooltip(name, {permanent: true, direction: 'right', className: labelClass, offset: [5, 0]});
+                }
+                l.on('click', () => openDossier(name || 'UNNAMED ASSET', type, country, [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
 
                 if (type === 'SAM') {
                     let n = name.toUpperCase();
