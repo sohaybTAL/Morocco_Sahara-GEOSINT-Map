@@ -563,56 +563,89 @@
         let flightInterval = null;
 
         function fetchFlights() {
-            // Using AllOrigins CORS proxy since OpenSky blocks direct browser fetch on Netlify
-            const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://opensky-network.org/api/states/all?lamin=18&lomin=-20&lamax=38&lomax=15');
-            fetch(url)
-                .then(r => r.json())
-                .then(data => {
-                    flightLayer.clearLayers();
-                    // OpenSky format: states array [icao24, callsign, origin, time, time, lon, lat, baro_alt, on_ground, velocity, heading, vert_rate, sensors, geo_alt, squawk, spi, position_source]
-                    const ac = data.states || [];
-                    ac.forEach(function(a) {
-                        const lat = a[6], lon = a[5];
-                        if (!lat || !lon) return;
-                        const callsign = (a[1] || '').trim() || (a[0] || 'UNKNOWN');
-                        const alt_m = a[7] || a[13];
-                        const alt = alt_m ? Math.round(alt_m * 3.28084) + ' ft' : 'N/A';
-                        const spd = a[9] ? Math.round(a[9] * 1.944) + ' kts' : 'N/A';
-                        const hdg = a[10] || 0;
-                        const squawk = a[14] || 'N/A';
-                        // Military squawk codes / callsign patterns
-                        const isMil = (callsign.startsWith('RCH') || callsign.startsWith('REACH') || callsign.startsWith('FORTE') || callsign.startsWith('JAKE') || callsign.startsWith('TOPCT') || squawk === '7700' || squawk === '7600');
-                        const color = isMil ? '#ff4400' : '#ffff00';
+            // Get current map view boundaries dynamically for "worldwide" support
+            let b = map.getBounds();
+            let n = b.getNorth(), s = b.getSouth(), w = b.getWest(), e = b.getEast();
+            // Clamp coordinates to valid Earth bounds
+            if(n > 90) n = 90; if(s < -90) s = -90;
+            if(w < -180) w = -180; if(e > 180) e = 180;
+            let boundsStr = `${n.toFixed(2)},${s.toFixed(2)},${w.toFixed(2)},${e.toFixed(2)}`;
 
-                        const icon = L.divIcon({
-                            className: '',
-                            html: '<div style="transform:rotate(' + hdg + 'deg); color:' + color + '; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>',
-                            iconSize: [14, 14],
-                            iconAnchor: [7, 7]
-                        });
+            window.processFlights = function(data) {
+                flightLayer.clearLayers();
+                let count = 0;
+                for (let key in data) {
+                    if (key === 'full_count' || key === 'version') continue;
+                    count++;
+                    const a = data[key];
+                    const lat = a[1];
+                    const lon = a[2];
+                    const hdg = a[3];
+                    const alt = Math.round(a[4]);
+                    const spd = Math.round(a[5]);
+                    const squawk = a[6] || 'N/A';
+                    const type = a[8] || 'UNKNOWN';
+                    const reg = a[9] || 'N/A';
+                    const orig = a[11] || 'N/A';
+                    const dest = a[12] || 'N/A';
+                    const flightNo = a[13] || 'N/A';
+                    const onGround = a[14] ? 'YES' : 'NO';
+                    const vspd = a[15] || 0;
+                    const callsign = (a[16] || a[13] || a[9] || 'UNKNOWN').trim();
+                    
+                    const isMil = (callsign.startsWith('RCH') || callsign.startsWith('FORTE') || callsign.startsWith('JAKE') || squawk === '7700' || squawk === '7600');
+                    const color = isMil ? '#ff4400' : '#ffff00';
 
-                        const marker = L.marker([lat, lon], {icon: icon});
-                        marker.bindTooltip(callsign, {permanent: false, direction: 'right', className: 'base-label', offset: [8, 0]});
-                        marker.bindPopup(
-                            '<div style="font-family:Courier New; background:#000; color:#0f0; padding:8px; border:1px solid #0f0; font-size:12px;">' +
-                            '<strong style="color:' + color + ';">[' + callsign + ']</strong><br>' +
-                            (isMil ? '<span style="color:#ff4400; font-weight:bold;">** MILITARY **</span><br>' : '') +
-                            'ALT: ' + alt + '<br>' +
-                            'SPD: ' + spd + '<br>' +
-                            'HDG: ' + Math.round(hdg) + '&deg;<br>' +
-                            'ICAO: ' + (a[0] || 'N/A') + '<br>' +
-                            'SQUAWK: ' + squawk +
-                            '</div>'
-                        );
-                        marker.addTo(flightLayer);
+                    const icon = L.divIcon({
+                        className: '',
+                        html: '<div style="transform:rotate(' + hdg + 'deg); color:' + color + '; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>',
+                        iconSize: [14, 14],
+                        iconAnchor: [7, 7]
                     });
-                    const statusEl = document.getElementById('flight-status');
-                    if (statusEl) statusEl.innerText = ac.length + ' AIRCRAFT TRACKED';
-                })
-                .catch(function() {
-                    const statusEl = document.getElementById('flight-status');
-                    if (statusEl) statusEl.innerText = 'FEED OFFLINE';
-                });
+
+                    const marker = L.marker([lat, lon], {icon: icon});
+                    marker.bindTooltip(callsign, {permanent: false, direction: 'right', className: 'base-label', offset: [8, 0]});
+                    
+                    // Create FlightRadar24 Link
+                    let fr24Link = `https://www.flightradar24.com/${callsign}/${key}`;
+                    
+                    // Construct detailed popup
+                    let vspdStr = vspd > 0 ? `+${vspd} fpm` : `${vspd} fpm`;
+                    let popupHtml = `<div style="font-family:Courier New; background:#000; color:#0f0; padding:8px; border:1px solid #0f0; font-size:12px; width: 220px; line-height: 1.4;">` +
+                        `<strong style="color:${color}; font-size: 14px;">[${callsign}]</strong><br>` +
+                        (isMil ? `<span style="color:#ff4400; font-weight:bold;">** MILITARY / ALERT **</span><br>` : '') +
+                        `<div style="border-bottom:1px dashed #333; margin:4px 0;"></div>` +
+                        `<b>ROUTE:</b> ${orig} &rarr; ${dest}<br>` +
+                        `<b>FLIGHT:</b> ${flightNo}<br>` +
+                        `<b>AIRCRAFT:</b> ${type} (${reg})<br>` +
+                        `<div style="border-bottom:1px dashed #333; margin:4px 0;"></div>` +
+                        `<b>ALT:</b> ${alt} ft (${onGround === 'YES' ? 'GROUND' : 'AIR'})<br>` +
+                        `<b>SPD:</b> ${spd} kts<br>` +
+                        `<b>HDG:</b> ${Math.round(hdg)}&deg;<br>` +
+                        `<b>V.SPD:</b> ${vspdStr}<br>` +
+                        `<b>SQUAWK:</b> ${squawk}<br>` +
+                        `<div style="border-bottom:1px dashed #333; margin:4px 0;"></div>` +
+                        `<div style="text-align:center; margin-bottom: 2px;">` +
+                        `<a href="${fr24Link}" target="_blank" style="color:#0ff; text-decoration:none; font-weight:bold; border:1px solid #0ff; padding:2px 5px; display:inline-block; margin-top:2px;">[ VIEW ON FLIGHTRADAR24 ]</a>` +
+                        `</div>` +
+                        `<span style="color:#aaa; font-size:10px;">GPS: ${lat.toFixed(4)}, ${lon.toFixed(4)}</span>` +
+                        `</div>`;
+                    
+                    marker.bindPopup(popupHtml);
+                    marker.addTo(flightLayer);
+                }
+                const statusEl = document.getElementById('flight-status');
+                if (statusEl) statusEl.innerText = count + ' AIRCRAFT IN VIEW';
+            };
+
+            const script = document.createElement('script');
+            // Fetch using dynamic map boundaries
+            script.src = `https://data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=${boundsStr}&callback=processFlights`;
+            document.body.appendChild(script);
+            
+            setTimeout(() => { 
+                if (document.body.contains(script)) document.body.removeChild(script); 
+            }, 3000);
         }
 
         document.getElementById('layer-flights').addEventListener('change', function(e) {
@@ -630,6 +663,16 @@
             }
         });
 
+
+        // Update flights dynamically when user drags or zooms the map
+        let moveTimeout;
+        map.on('moveend', function() {
+            if (document.getElementById('layer-flights').checked) {
+                clearTimeout(moveTimeout);
+                moveTimeout = setTimeout(fetchFlights, 1500); // 1.5s delay to prevent API spam while panning
+            }
+        });
+        
         // Initial Render
         renderMap();
 
