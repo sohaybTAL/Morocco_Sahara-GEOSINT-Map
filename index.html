@@ -166,11 +166,12 @@
             <label><input type="checkbox" id="layer-sam-threat" checked> <span class="legend-color" style="background:transparent; border:1px solid #f00; border-radius:50%"></span>Show Verified SAM Rings</label>
         </div>
           <div class="control-group" style="margin-top: 10px;">
-              <label><input type="checkbox" id="layer-terminator" checked> <span class="legend-color" style="background:rgba(0,0,0,0.8); border:1px solid #555;"></span>Live Terminator Line (Night)</label>
-          </div>
-          <div class="control-group" style="margin-top: 10px;">
               <label><input type="checkbox" id="layer-labels" checked> <span class="legend-color" style="background:transparent; border:1px dashed #fff;"></span>Map Borders & City Labels</label>
           </div>
+          <div class="control-group" style="margin-top: 10px;">
+              <label><input type="checkbox" id="layer-flights"> <span class="legend-color" style="background:#ffff00; border:none;"></span>Live Air Traffic (ADS-B)</label>
+          </div>
+          <div id="flight-status" style="font-size:10px; color:#555; margin-top:2px; margin-left:22px; display:none;">SCANNING...</div>
       </div>
 
     <!-- Hardware Dossier -->
@@ -193,7 +194,6 @@
     <div class="hud-overlay pulse" style="color:#0f0; font-size:12px; font-weight:bold; text-shadow: 0 0 5px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/@joergdietrich/leaflet.terminator"></script>
       <script src="map_data.js"></script>
     
     <script>
@@ -301,16 +301,6 @@
         document.getElementById('layer-labels').addEventListener('change', function(e) {
             if(e.target.checked) map.addLayer(labelsLayer);
             else map.removeLayer(labelsLayer);
-        });
-        
-        let terminator = L.terminator().addTo(map);
-        setInterval(function(){
-            terminator.setTime();
-        }, 60000); // Update every minute
-        
-        document.getElementById('layer-terminator').addEventListener('change', function(e) {
-            if(e.target.checked) map.addLayer(terminator);
-            else map.removeLayer(terminator);
         });
 
 
@@ -565,17 +555,93 @@
             cb.addEventListener('change', renderMap);
         });
 
+
+        // -------------------------
+        // FEATURE: LIVE AIR TRAFFIC (ADS-B Exchange)
+        // -------------------------
+        const flightLayer = L.layerGroup();
+        let flightInterval = null;
+
+        function fetchFlights() {
+            // Cover the full Sahara region: center ~28N, -5E, radius 1200km
+            const url = 'https://opensky-network.org/api/states/all?lamin=18&lomin=-20&lamax=38&lomax=15';
+            fetch(url)
+                .then(r => r.json())
+                .then(data => {
+                    flightLayer.clearLayers();
+                    // OpenSky format: states array [icao24, callsign, origin, time, time, lon, lat, baro_alt, on_ground, velocity, heading, vert_rate, sensors, geo_alt, squawk, spi, position_source]
+                    const ac = data.states || [];
+                    ac.forEach(function(a) {
+                        const lat = a[6], lon = a[5];
+                        if (!lat || !lon) return;
+                        const callsign = (a[1] || '').trim() || (a[0] || 'UNKNOWN');
+                        const alt_m = a[7] || a[13];
+                        const alt = alt_m ? Math.round(alt_m * 3.28084) + ' ft' : 'N/A';
+                        const spd = a[9] ? Math.round(a[9] * 1.944) + ' kts' : 'N/A';
+                        const hdg = a[10] || 0;
+                        const squawk = a[14] || 'N/A';
+                        // Military squawk codes / callsign patterns
+                        const isMil = (callsign.startsWith('RCH') || callsign.startsWith('REACH') || callsign.startsWith('FORTE') || callsign.startsWith('JAKE') || callsign.startsWith('TOPCT') || squawk === '7700' || squawk === '7600');
+                        const color = isMil ? '#ff4400' : '#ffff00';
+
+                        const icon = L.divIcon({
+                            className: '',
+                            html: '<div style="transform:rotate(' + hdg + 'deg); color:' + color + '; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>',
+                            iconSize: [14, 14],
+                            iconAnchor: [7, 7]
+                        });
+
+                        const marker = L.marker([a.lat, a.lon], {icon: icon});
+                        marker.bindTooltip(callsign, {permanent: false, direction: 'right', className: 'base-label', offset: [8, 0]});
+                        marker.bindPopup(
+                            '<div style="font-family:Courier New; background:#000; color:#0f0; padding:8px; border:1px solid #0f0; font-size:12px;">' +
+                            '<strong style="color:' + color + ';">[' + callsign + ']</strong><br>' +
+                            (isMil ? '<span style="color:#ff4400; font-weight:bold;">** MILITARY **</span><br>' : '') +
+                            'ALT: ' + alt + '<br>' +
+                            'SPD: ' + spd + '<br>' +
+                            'HDG: ' + Math.round(hdg) + '&deg;<br>' +
+                            'ICAO: ' + (a[0] || 'N/A') + '<br>' +
+                            'SQUAWK: ' + squawk +
+                            '</div>'
+                        );
+                        marker.addTo(flightLayer);
+                    });
+                    const statusEl = document.getElementById('flight-status');
+                    if (statusEl) statusEl.innerText = ac.length + ' AIRCRAFT TRACKED';
+                })
+                .catch(function() {
+                    const statusEl = document.getElementById('flight-status');
+                    if (statusEl) statusEl.innerText = 'FEED OFFLINE';
+                });
+        }
+
+        document.getElementById('layer-flights').addEventListener('change', function(e) {
+            const statusEl = document.getElementById('flight-status');
+            if (e.target.checked) {
+                flightLayer.addTo(map);
+                statusEl.style.display = 'block';
+                statusEl.innerText = 'SCANNING...';
+                fetchFlights();
+                flightInterval = setInterval(fetchFlights, 30000);
+            } else {
+                map.removeLayer(flightLayer);
+                statusEl.style.display = 'none';
+                if (flightInterval) { clearInterval(flightInterval); flightInterval = null; }
+            }
+        });
+
         // Initial Render
         renderMap();
 
         // Hide loading screen after map is rendered
+        // Use a longer timeout to ensure map_data.js is fully parsed on slow connections
         setTimeout(function() {
             var ls = document.getElementById('loading-screen');
             if (ls) {
                 ls.classList.add('fade-out');
                 setTimeout(function() { ls.style.display = 'none'; }, 700);
             }
-        }, 800);
+        }, 2500);
     </script>
 </body>
 </html>
