@@ -661,7 +661,7 @@
 
             const script = document.createElement('script');
             // Fetch using dynamic map boundaries
-            script.src = `https://data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=${boundsStr}&callback=processFlights`;
+            script.src = `https://data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=${boundsStr}&faa=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=1&estimated=1&maxage=14400&gliders=1&stats=1&callback=processFlights`;
             document.body.appendChild(script);
             
             setTimeout(() => { 
