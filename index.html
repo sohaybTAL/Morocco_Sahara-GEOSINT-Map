@@ -631,6 +631,7 @@
                     });
 
                     const marker = L.marker([lat, lon], {icon: icon});
+                    marker.flightData = { callsign: callsign.toUpperCase(), type: type.toUpperCase(), reg: reg.toUpperCase(), isRMAF: isRMAF, isMil: isMil };
                     
                     // Change tooltip color for RMAF
                     let tooltipClass = isRMAF ? 'base-label mor-label' : 'base-label';
