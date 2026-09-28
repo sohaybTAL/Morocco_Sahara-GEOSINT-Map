@@ -515,3 +515,520 @@
     </script>
 </body>
 </html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT Command Center: Sahara</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; }
+        #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; }
+        
+        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(17,17,17,0.95); border-right: 2px solid #333; z-index: 1000; padding: 20px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); }
+        h1 { font-size: 18px; color: #fff; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 0; }
+        h2 { font-size: 14px; color: #aaa; margin-top: 20px; text-transform: uppercase; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        .stat-box { background: rgba(34,34,34,0.8); padding: 10px; margin-bottom: 10px; border: 1px solid #444; border-left: 4px solid #0f0; }
+        .stat-box.alg { border-left-color: #f00; color: #ff5555; }
+        .stat-box.mor { border-left-color: #0f0; color: #55ff55; }
+        .control-group { margin-top: 15px; }
+        label { display: block; margin-bottom: 10px; font-size: 13px; cursor: pointer; color: #ddd; transition: 0.2s; }
+        label:hover { color: #fff; }
+        input[type="checkbox"] { margin-right: 10px; accent-color: #0f0; cursor: pointer; }
+        .legend-color { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1px solid #555; vertical-align: middle; }
+        
+        #dossier-panel { position: absolute; top: 20px; right: -400px; width: 350px; background: rgba(10,10,10,0.95); border: 1px solid #0f0; z-index: 1001; padding: 20px; color: #fff; box-shadow: -5px 5px 15px rgba(0,0,0,0.8); transition: right 0.3s ease; backdrop-filter: blur(5px); }
+        #dossier-panel.open { right: 20px; }
+        #dossier-close { float: right; color: #f00; cursor: pointer; font-weight: bold; border: 1px solid #f00; padding: 2px 5px; }
+        .dossier-img { width: 100%; height: 150px; background: #333; margin: 10px 0; border: 1px solid #555; object-fit: cover; }
+        .dossier-title { font-size: 18px; color: #0f0; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; }
+        .dossier-stat { font-size: 12px; margin-bottom: 5px; color: #aaa; }
+        .dossier-stat span { color: #fff; }
+        
+        .hud-overlay { position: absolute; top: 20px; left: 430px; z-index: 1000; pointer-events: none; opacity: 0.5; }
+        .pulse { animation: pulsate 2s ease-out infinite; }
+        @keyframes pulsate { 0% { opacity: 0.2; } 50% { opacity: 1.0; } 100% { opacity: 0.2; } }
+        
+        .base-label { background: transparent; border: none; box-shadow: none; color: #fff; font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
+        .base-label.alg-label { color: #ff5555; }
+        .base-label.mor-label { color: #55ff55; }
+        .base-label.spa-label { color: #ff55ff; }
+    
+        .target-crosshair { animation: spin 4s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+    <!-- Briefing Modal -->
+    <div id="briefing-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; background: rgba(5,5,5,0.95); border: 2px solid #0f0; z-index: 9999; padding: 25px; color: #fff; font-family: 'Courier New', monospace; box-shadow: 0 0 30px rgba(0,255,31,0.4); backdrop-filter: blur(5px);">
+        <h2 style="color: #0f0; text-align: center; border-bottom: 1px dashed #0f0; padding-bottom: 10px; margin-top: 0; letter-spacing: 2px;">[ MISSION BRIEFING ]</h2>
+        <p style="color: #ddd; font-size: 14px; text-align: center;">Welcome to the OSINT Command Center.</p>
+        <ul style="color: #aaa; font-size: 13px; line-height: 1.8; padding-left: 20px;">
+            <li><strong style="color: #0f0;">COMMAND TERMINAL:</strong> Use the sidebar terminal to search for specific bases (e.g., "Tindouf") or paste raw GPS coordinates to drop a targeting crosshair.</li>
+            <li><strong style="color: #0f0;">COORDINATE EXTRACTION:</strong> Right-click anywhere on the map to instantly copy exact geographic coordinates to your clipboard.</li>
+            <li><strong style="color: #0f0;">LIVE TERMINATOR:</strong> Enable the Terminator layer to track the live Day/Night shadow moving across the Sahara in real-time.</li>
+        </ul>
+        <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
+    </div>
+
+
+    <div id="sidebar">
+        <h1 style='text-align: center;'>[Top Secret] GeoINT</h1>
+        <div style="margin-bottom: 20px; border-bottom: 1px dashed #333; padding-bottom: 15px; font-size: 14px; color: #ffffff; text-align: center; letter-spacing: 2px; line-height: 1.5;">
+            [ SYSTEM ARCHITECT ]<br>
+            <span style="color: #0f0; font-weight: bold; font-size: 16px;">ElMakhchouniX</span><br>
+            <span style="font-size: 12px;">MOROCCO SAHARA GEOINT</span>
+        </div>
+        
+                <h2>Satellite Feed</h2>
+        <div class="control-group" style="padding-bottom: 15px;">
+            <select id="sat-provider" style="width: 100%; background: #111; color: #0f0; border: 1px solid #333; padding: 5px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer; outline: none;">
+                <option value="esri">ESRI SATELLITE (DEFAULT)</option>
+                <option value="google">GOOGLE SATELLITE</option>
+                <option value="bing">BING SATELLITE</option>
+                <option value="topo">TOPOGRAPHIC MAP</option>
+            </select>
+        </div>
+        
+        
+        <h2>Command Terminal</h2>
+        <div style="background: #000; border: 1px solid #0f0; padding: 5px; font-family: 'Courier New', monospace; margin-bottom: 15px; position: relative; box-shadow: 0 0 5px #0f0;">
+            <span style="color: #0f0; position: absolute; left: 8px; top: 7px;">></span>
+            <input type="text" id="cmd-terminal" placeholder="Search Asset or Paste GPS..." style="width: 100%; background: transparent; color: #0f0; border: none; outline: none; padding-left: 15px; font-family: 'Courier New', monospace; font-size: 11px;" onkeypress="handleTerminal(event)">
+        </div>
+        
+        <h2>Doctrine Analysis</h2>
+        <div class="stat-box alg">
+            <strong>ALGERIA: MISSILE UMBRELLA</strong><br>SAM Sites: 32<br>Radars: 32
+        </div>
+        <div class="stat-box mor">
+            <strong>MOROCCO: EARLY WARNING</strong><br>EWR Sites: 20<br>SAM Sites: 8
+        </div>
+
+        <h2>Tactical Overlays</h2>
+        <div class="control-group">
+            <label><input type="checkbox" id="layer-morocco" checked> <span class="legend-color" style="background:#00ff1f"></span>[MOR] Morocco (Lines & Bases)</label>
+            <label><input type="checkbox" id="layer-algeria" checked> <span class="legend-color" style="background:#ff0000"></span>[ALG] Algeria (Lines & Bases)</label>
+            <label><input type="checkbox" id="layer-mauritania" checked> <span class="legend-color" style="background:#ffff00"></span>[MRT] Mauritania (Lines)</label>
+            <label><input type="checkbox" id="layer-spain" checked> <span class="legend-color" style="background:#ff00ff"></span>[ESP] Spain (Bases)</label>
+            <label><input type="checkbox" id="layer-dams" checked> <span class="legend-color" style="background:#00ffff"></span>[H2O] Strategic Dams</label>
+        </div>
+        
+        <h2>Asset Filters</h2>
+        <div class="control-group">
+            <label><input type="checkbox" class="type-filter" value="WALL/TRENCH" checked> Defensive Lines / Berms</label>
+            <label><input type="checkbox" class="type-filter" value="AIRBASE" checked> Airbases</label>
+            <label><input type="checkbox" class="type-filter" value="SAM" checked> SAM Sites</label>
+            <label><input type="checkbox" class="type-filter" value="RADAR" checked> Radars</label>
+            <label><input type="checkbox" class="type-filter" value="EWR" checked> Early Warning (EWR)</label>
+            <label><input type="checkbox" class="type-filter" value="AAA" checked> Anti-Air (AAA)</label>
+            <label><input type="checkbox" class="type-filter" value="DEPOT" checked> Depots / Ranges</label>
+        </div>
+
+        <h2>Threat Assessment</h2>
+        <div class="control-group">
+            <label><input type="checkbox" id="layer-sam-threat" checked> <span class="legend-color" style="background:transparent; border:1px solid #f00; border-radius:50%"></span>Show Verified SAM Rings</label>
+        </div>
+          <div class="control-group" style="margin-top: 10px;">
+              <label><input type="checkbox" id="layer-terminator" checked> <span class="legend-color" style="background:rgba(0,0,0,0.8); border:1px solid #555;"></span>Live Terminator Line (Night)</label>
+          </div>
+          <div class="control-group" style="margin-top: 10px;">
+              <label><input type="checkbox" id="layer-labels" checked> <span class="legend-color" style="background:transparent; border:1px dashed #fff;"></span>Map Borders & City Labels</label>
+          </div>
+      </div>
+
+    <!-- Hardware Dossier -->
+    <div id="dossier-panel">
+        <div id="dossier-close" onclick="closeDossier()">X</div>
+        <div class="dossier-title" id="d_title">ASSET NAME</div>
+        <img class="dossier-img" id="d_img" src="">
+        <div class="dossier-stat">TYPE: <span id="d_type">...</span></div>
+        <div class="dossier-stat">COUNTRY: <span id="d_country">...</span></div>
+        <div class="dossier-stat">STATUS: <span id="d_status">ACTIVE</span></div>
+        <div class="dossier-stat">INTELLIGENCE:</div>
+        <div style="font-size: 11px; color: #ddd; margin-top: 5px; padding: 5px; background: #222; border-left: 2px solid #0f0;" id="d_intel">
+            ...
+        </div>
+        <br>
+        <button onclick="runLineOfSight()" style="width:100%; background:#0f0; color:#000; border:none; padding:8px; cursor:pointer; font-weight:bold; font-family:Courier New;">[EXECUTE RADAR LINE-OF-SIGHT]</button>
+    </div>
+
+    <div id="map"></div>
+    <div class="hud-overlay pulse" style="color:#0f0; font-size:12px; font-weight:bold; text-shadow: 0 0 5px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@joergdietrich/leaflet.terminator"></script>
+      <script src="map_data.js"></script>
+    
+    <script>
+        const map = L.map('map', { zoomControl: false }).setView([28.0, -5.0], 6);
+        L.control.zoom({ position: 'topleft' }).addTo(map);
+
+                // Bing QuadKey implementation
+        L.TileLayer.Bing = L.TileLayer.extend({
+            getTileUrl: function(coords) {
+                let quadkey = '';
+                for (let i = coords.z; i > 0; i--) {
+                    let digit = 0;
+                    let mask = 1 << (i - 1);
+                    if ((coords.x & mask) !== 0) digit += 1;
+                    if ((coords.y & mask) !== 0) digit += 2;
+                    quadkey += digit;
+                }
+                return 'https://ecn.t3.tiles.virtualearth.net/tiles/a' + quadkey + '.jpeg?g=1';
+            }
+        });
+
+        const providers = {
+            esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri', maxZoom: 18 }),
+            google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20 }),
+            bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19 }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17 })
+        };
+        
+        let currentProvider = providers.esri;
+        currentProvider.addTo(map);
+
+        document.getElementById('sat-provider').addEventListener('change', function(e) {
+            map.removeLayer(currentProvider);
+            currentProvider = providers[e.target.value];
+            currentProvider.addTo(map);
+            // Re-add the LOS layer if it has anything on it to ensure it stays on top!
+            if (map.hasLayer(losLayer)) {
+                map.removeLayer(losLayer);
+                losLayer.addTo(map);
+            }
+        });
+
+        const moroccoLayer = L.layerGroup().addTo(map);
+        const algeriaLayer = L.layerGroup().addTo(map);
+        const spainLayer = L.layerGroup().addTo(map);
+        const mauritaniaLayer = L.layerGroup().addTo(map);
+        const damsLayer = L.layerGroup().addTo(map);
+        const samThreatLayer = L.layerGroup().addTo(map);
+        const losLayer = L.layerGroup().addTo(map);
+
+        let currentAsset = null;
+
+        function openDossier(name, type, country, latlng) {
+            currentAsset = latlng;
+            document.getElementById('d_title').innerText = name;
+            document.getElementById('d_type').innerText = type;
+            document.getElementById('d_country').innerText = country;
+            
+            let img = 'https://upload.wikimedia.org/wikipedia/commons/c/ca/Empty_image.png/120px-Empty_image.png';
+            let intel = 'Standard military installation. Awaiting further satellite confirmation.';
+            
+            if(type === 'SAM') {
+                let n = name.toUpperCase();
+                if(n.includes('SD50')) { intel = 'Sky Dragon 50 (SD50) Surface-to-Air Missile System (50km range). Verified in data.'; }
+                else if(n.includes('S300')) { intel = 'S-300 Surface-to-Air Missile System (~150km range). Verified in data.'; }
+                else if(n.includes('BUK_PANTSIR')) { intel = 'Buk / Pantsir Point Defense System (~45km range). Verified in data.'; }
+                else if(n.includes('BUK')) { intel = 'Buk Surface-to-Air Missile System (~45km range). Verified in data.'; }
+                else if(n.includes('SA2')) { intel = 'SA-2 Surface-to-Air Missile System (~45km range). Verified in data.'; }
+                else if(n.includes('SA3')) { intel = 'SA-3 Surface-to-Air Missile System (~35km range). Verified in data.'; }
+                else { intel = 'Surface-to-Air Missile System. Model not specified in raw data.'; }
+            } else if(type === 'RADAR' || type === 'EWR') {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/4/4c/AN-TPS-75_radar_antenna.jpg';
+                intel = 'Radar / Early Warning array.';
+            } else if(type === 'AIRBASE') {
+                intel = 'Strategic Airbase.';
+            } else if(type === 'DAM') {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Barrage_Bin_El_Ouidane.jpg/640px-Barrage_Bin_El_Ouidane.jpg';
+                intel = 'Strategic Water Infrastructure.';
+            }
+
+            document.getElementById('d_img').src = img;
+            document.getElementById('d_intel').innerText = intel;
+            document.getElementById('dossier-panel').classList.add('open');
+        }
+
+        function closeDossier() {
+            document.getElementById('dossier-panel').classList.remove('open');
+            losLayer.clearLayers();
+        }
+
+
+        // -------------------------
+        // FEATURE: TERMINATOR LINE
+        // -------------------------
+        
+        // -------------------------
+        // FEATURE: BORDERS & LABELS
+        // -------------------------
+        let labelsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+            pane: 'markerPane', // Ensures labels stay on top of the satellite imagery
+            zIndex: 400
+        }).addTo(map);
+
+        document.getElementById('layer-labels').addEventListener('change', function(e) {
+            if(e.target.checked) map.addLayer(labelsLayer);
+            else map.removeLayer(labelsLayer);
+        });
+        
+        let terminator = L.terminator().addTo(map);
+        setInterval(function(){
+            terminator.setTime();
+        }, 60000); // Update every minute
+        
+        document.getElementById('layer-terminator').addEventListener('change', function(e) {
+            if(e.target.checked) map.addLayer(terminator);
+            else map.removeLayer(terminator);
+        });
+
+
+        // -------------------------
+        // FEATURE: COORDINATE EXTRACTION (RIGHT-CLICK)
+        // -------------------------
+        map.on('contextmenu', function(e) {
+            let lat = e.latlng.lat.toFixed(5);
+            let lng = e.latlng.lng.toFixed(5);
+            let coordString = `${lat}, ${lng}`;
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(coordString).then(() => {
+                // Show a quick popup
+                L.popup({ className: 'custom-popup' })
+                    .setLatLng(e.latlng)
+                    .setContent(`<div style="text-align:center; color:#0f0; font-weight:bold; font-family:'Courier New'; border:1px solid #0f0; padding:5px; background:#000;">TARGET ACQUIRED<br>${coordString}<br><span style="font-size:9px; color:#fff;">COPIED TO CLIPBOARD</span></div>`)
+                    .openOn(map);
+            });
+        });
+
+        // -------------------------
+        // FEATURE: COMMAND TERMINAL
+
+        // -------------------------
+        let targetCrosshair = null;
+
+        function handleTerminal(e) {
+            if (e.key === 'Enter') {
+                let val = e.target.value.trim();
+                if (!val) return;
+                
+                // Check if it's coordinates (e.g. 27.123, -10.456)
+                let coordMatch = val.match(/^(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)$/);
+                if (coordMatch) {
+                    let lat = parseFloat(coordMatch[1]);
+                    let lng = parseFloat(coordMatch[3]);
+                    executeCoordinateDrop(lat, lng);
+                } else {
+                    executeAssetSearch(val.toLowerCase());
+                }
+                
+                e.target.value = '';
+            }
+        }
+
+        function executeCoordinateDrop(lat, lng) {
+            map.flyTo([lat, lng], 12, { animate: true, duration: 2 });
+            
+            if (targetCrosshair) map.removeLayer(targetCrosshair);
+            
+            // Draw a cool targeting crosshair
+            let icon = L.divIcon({
+                className: 'target-crosshair',
+                html: '<div style="width: 40px; height: 40px; border: 2px solid #f00; border-radius: 50%; position: relative;"><div style="position: absolute; top: 19px; left: -10px; width: 60px; height: 2px; background: #f00;"></div><div style="position: absolute; top: -10px; left: 19px; width: 2px; height: 60px; background: #f00;"></div></div>',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+            targetCrosshair = L.marker([lat, lng], {icon: icon}).addTo(map);
+            
+            // Remove it after 10 seconds
+            setTimeout(() => {
+                if (targetCrosshair) map.removeLayer(targetCrosshair);
+            }, 10000);
+        }
+
+        function executeAssetSearch(query) {
+            let allFeatures = [];
+            if(document.getElementById('layer-morocco').checked) allFeatures = allFeatures.concat(moroccoData.features);
+            if(document.getElementById('layer-algeria').checked) allFeatures = allFeatures.concat(algeriaData.features);
+            
+            let bestMatch = null;
+            
+            for (let f of allFeatures) {
+                if (f.properties && f.properties.name && f.properties.name.toLowerCase().includes(query)) {
+                    bestMatch = f;
+                    break;
+                }
+            }
+            
+            if (bestMatch && bestMatch.geometry.type === 'Point') {
+                let lat = bestMatch.geometry.coordinates[1];
+                let lng = bestMatch.geometry.coordinates[0];
+                map.flyTo([lat, lng], 14, { animate: true, duration: 2 });
+                
+                // Simulate clicking it to open dossier
+                setTimeout(() => {
+                    openDossier(bestMatch.properties.name, getType(bestMatch), 'SEARCH RESULT', [lat, lng]);
+                }, 2200);
+            } else {
+                alert('ASSET NOT FOUND OR NOT CURRENTLY VISIBLE ON ACTIVE LAYERS.');
+            }
+        }
+
+        function runLineOfSight() {
+
+            if(!currentAsset) return;
+            losLayer.clearLayers();
+            L.circle(currentAsset, {
+                color: '#00ff1f', fillColor: '#00ff1f', fillOpacity: 0.2, radius: 150000,
+                dashArray: '10, 20', className: 'pulse'
+            }).addTo(losLayer);
+            map.flyTo(currentAsset, 8, { duration: 1.5 });
+        }
+
+        const datMor = typeof moroccoData !== 'undefined' ? moroccoData : {features:[]};
+        const datAlg = typeof algeriaData !== 'undefined' ? algeriaData : {features:[]};
+        const datSpa = typeof spainData !== 'undefined' ? spainData : {features:[]};
+        const datMau = typeof mauritaniaData !== 'undefined' ? mauritaniaData : {features:[]};
+        const datDam = typeof damsData !== 'undefined' ? damsData : {features:[]};
+
+        function getType(f) {
+            if(f.geometry.type === 'LineString') return 'WALL/TRENCH';
+            let name = (f.properties.name || "").toUpperCase();
+            if(name.includes('AIRBASE')) return 'AIRBASE';
+            if(name.includes('SAM')) return 'SAM';
+            if(name.includes('RADAR')) return 'RADAR';
+            if(name.includes('EWR')) return 'EWR';
+            if(name.includes('AAA')) return 'AAA';
+            if(name.includes('DEPOT') || name.includes('RANGE')) return 'DEPOT';
+            return 'INSTALLATION';
+        }
+
+        function bindData(f, l, color, country) {
+            let name = f.properties.name || "UNNAMED ASSET";
+            let type = getType(f);
+            
+            if(f.geometry.type === 'Point') {
+                let labelClass = 'base-label';
+                if(country === 'ALGERIA') labelClass += ' alg-label';
+                if(country === 'MOROCCO') labelClass += ' mor-label';
+                if(country === 'SPAIN') labelClass += ' spa-label';
+                
+                l.bindTooltip(name, {permanent: true, direction: 'right', className: labelClass, offset: [5, 0]});
+                l.on('click', () => openDossier(name, type, country, [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+
+                if (type === 'SAM') {
+                    let n = name.toUpperCase();
+                    let threatRadius = 0;
+                    if(n.includes('SD50')) threatRadius = 50000;
+                    else if(n.includes('S300')) threatRadius = 150000;
+                    else if(n.includes('BUK_PANTSIR')) threatRadius = 45000;
+                    else if(n.includes('BUK')) threatRadius = 45000;
+                    else if(n.includes('SA2')) threatRadius = 45000;
+                    else if(n.includes('SA3')) threatRadius = 35000;
+                    
+                    if (threatRadius > 0) {
+                        let cColor = country === 'ALGERIA' ? '#ff0000' : '#00ff1f';
+                        L.circle([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
+                            color: cColor, fillColor: cColor, fillOpacity: 0.0, radius: threatRadius, weight: 2
+                        }).addTo(samThreatLayer);
+                    }
+                }
+            }
+        }
+
+        function renderMap() {
+            try {
+                moroccoLayer.clearLayers();
+                algeriaLayer.clearLayers();
+                spainLayer.clearLayers();
+                mauritaniaLayer.clearLayers();
+                damsLayer.clearLayers();
+                samThreatLayer.clearLayers();
+                losLayer.clearLayers();
+                
+                let activeTypes = Array.from(document.querySelectorAll('.type-filter:checked')).map(cb => cb.value);
+                
+                function filterFeatures(features) {
+                    let out = [];
+                    features.forEach(f => {
+                        // Only skip MASSIVE polygons (hand-drawn SAM rings > 10km wide). Keep tiny base perimeters!
+                        if(f.geometry.type === 'Polygon') {
+                            let xs = f.geometry.coordinates[0].map(c => c[0]);
+                            let width = Math.max(...xs) - Math.min(...xs);
+                            if(width > 0.1) return; // Skip hand-drawn 50km circles
+                        } 
+                        
+                        let t = getType(f);
+                        if(t === 'INSTALLATION' || activeTypes.includes(t)) {
+                            out.push(f);
+                        }
+                    });
+                    return out;
+                }
+
+                if(document.getElementById('layer-morocco').checked) {
+                    L.geoJSON(filterFeatures(datMor.features), {
+                        style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#00ff1f'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#00ff1f', fillOpacity: 1 }),
+                        onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
+                    }).addTo(moroccoLayer);
+                }
+                
+                if(document.getElementById('layer-algeria').checked) {
+                    L.geoJSON(filterFeatures(datAlg.features), {
+                        style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ff0000'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ff0000', fillOpacity: 1 }),
+                        onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
+                    }).addTo(algeriaLayer);
+                }
+                
+                if(document.getElementById('layer-spain').checked) {
+                    L.geoJSON(filterFeatures(datSpa.features), {
+                        style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ff00ff'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ff00ff', fillOpacity: 1 }),
+                        onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
+                    }).addTo(spainLayer);
+                }
+                
+                if(document.getElementById('layer-mauritania').checked) {
+                    L.geoJSON(filterFeatures(datMau.features), {
+                        style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ffff00'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ffff00', fillOpacity: 1 }),
+                        onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
+                    }).addTo(mauritaniaLayer);
+                }
+                
+                if(document.getElementById('layer-dams').checked) {
+                    L.geoJSON(datDam.features, {
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: '#00ffff', fillOpacity: 1 }),
+                        onEachFeature: (f, l) => {
+                            l.bindTooltip(f.properties.name, {permanent: true, direction: 'right', className: 'base-label', offset: [5, 0]});
+                            l.bindPopup(`<div class="custom-popup"><strong>[${f.properties.name}]</strong><br>Type: Strategic Dam / Water Asset</div>`);
+                            l.on('click', () => openDossier(f.properties.name, 'DAM', 'MOROCCO (WATER RESOURCE)', [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+                        }
+                    }).addTo(damsLayer);
+                }
+                
+                if(!document.getElementById('layer-sam-threat').checked) {
+                    map.removeLayer(samThreatLayer);
+                } else {
+                    map.addLayer(samThreatLayer);
+                }
+            } catch(e) {
+                console.error("Render crash:", e);
+            }
+        }
+
+        // Toggles
+        document.getElementById('layer-morocco').addEventListener('change', renderMap);
+        document.getElementById('layer-algeria').addEventListener('change', renderMap);
+        document.getElementById('layer-spain').addEventListener('change', renderMap);
+        document.getElementById('layer-mauritania').addEventListener('change', renderMap);
+        document.getElementById('layer-dams').addEventListener('change', renderMap);
+        document.getElementById('layer-sam-threat').addEventListener('change', renderMap);
+        
+        document.querySelectorAll('.type-filter').forEach(cb => {
+            cb.addEventListener('change', renderMap);
+        });
+
+        // Initial Render
+        renderMap();
+    </script>
+</body>
+</html>
