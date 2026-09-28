@@ -137,9 +137,12 @@
         
         
         <h2>Command Terminal</h2>
-        <div style="background: #000; border: 1px solid #0f0; padding: 5px; font-family: 'Courier New', monospace; margin-bottom: 15px; position: relative; box-shadow: 0 0 5px #0f0;">
-            <span style="color: #0f0; position: absolute; left: 8px; top: 7px;">></span>
-            <input type="text" id="cmd-terminal" placeholder="Search Asset or Paste GPS..." style="width: 100%; background: transparent; color: #0f0; border: none; outline: none; padding-left: 15px; font-family: 'Courier New', monospace; font-size: 11px;" onkeypress="handleTerminal(event)">
+        <div style="position: relative; margin-bottom: 15px;">
+            <div style="background: #000; border: 1px solid #0f0; padding: 5px; font-family: 'Courier New', monospace; position: relative; box-shadow: 0 0 5px #0f0;">
+                <span style="color: #0f0; position: absolute; left: 8px; top: 7px;">></span>
+                <input type="text" id="cmd-terminal" placeholder="Search Asset or Paste GPS..." style="width: 100%; background: transparent; color: #0f0; border: none; outline: none; padding-left: 15px; font-family: 'Courier New', monospace; font-size: 11px;" onkeyup="handleTerminalSuggest(event)" onkeypress="handleTerminal(event)">
+            </div>
+            <div id="cmd-suggestions" style="position: absolute; top: 32px; left: 0; width: 100%; background: #000; border: 1px solid #0f0; border-top: none; max-height: 250px; overflow-y: auto; z-index: 10000; display: none; font-family: 'Courier New', monospace; font-size: 11px;"></div>
         </div>
         
         <h2>Doctrine Analysis</h2>
@@ -361,6 +364,92 @@
             }
         }
 
+        
+        function handleTerminalSuggest(e) {
+            const val = e.target.value.trim().toUpperCase();
+            const box = document.getElementById('cmd-suggestions');
+            if (val.length < 2) {
+                if(box) box.style.display = 'none';
+                return;
+            }
+            
+            let html = '';
+            let count = 0;
+            
+            if (typeof flightLayer !== 'undefined' && map.hasLayer(flightLayer)) {
+                flightLayer.eachLayer(layer => {
+                    if (layer.flightData && count < 15) {
+                        const f = layer.flightData;
+                        if (f.callsign.includes(val) || f.type.includes(val) || f.reg.includes(val)) {
+                            let lat = layer.getLatLng().lat;
+                            let lng = layer.getLatLng().lng;
+                            let tag = f.isRMAF ? '[RMAF]' : (f.isMil ? '[MIL]' : '[CIV]');
+                            let color = f.isRMAF ? '#00ff1f' : (f.isMil ? '#ff4400' : '#ffff00');
+                            let layerId = layer._leaflet_id;
+                            html += `<div style="padding: 5px; border-bottom: 1px dashed #333; cursor: pointer; color: ${color};" 
+                                    onclick="clickSuggestion(${lat}, ${lng}, ${layerId})">
+                                    &#9992; ${tag} ${f.callsign} (${f.type})
+                                    </div>`;
+                            count++;
+                        }
+                    }
+                });
+            }
+            
+            let allFeatures = [];
+            if(document.getElementById('layer-morocco') && document.getElementById('layer-morocco').checked && typeof moroccoData !== 'undefined') allFeatures = allFeatures.concat(moroccoData.features);
+            if(document.getElementById('layer-algeria') && document.getElementById('layer-algeria').checked && typeof algeriaData !== 'undefined') allFeatures = allFeatures.concat(algeriaData.features);
+            
+            for (let f of allFeatures) {
+                if (count >= 25) break;
+                if (f.properties && f.properties.name && f.properties.name.toUpperCase().includes(val)) {
+                    if (f.geometry.type === 'Point') {
+                        let lat = f.geometry.coordinates[1];
+                        let lng = f.geometry.coordinates[0];
+                        let safeName = f.properties.name.replace(/'/g, "\\'");
+                        html += `<div style="padding: 5px; border-bottom: 1px dashed #333; cursor: pointer; color: #0f0;" 
+                                onclick="clickAssetSuggestion(${lat}, ${lng}, '${safeName}')">
+                                &#9672; [ASSET] ${f.properties.name}
+                                </div>`;
+                        count++;
+                    }
+                }
+            }
+            
+            if (html && box) {
+                box.innerHTML = html;
+                box.style.display = 'block';
+            } else if (box) {
+                box.style.display = 'none';
+            }
+        }
+        
+        function clickSuggestion(lat, lng, layerId) {
+            document.getElementById('cmd-suggestions').style.display = 'none';
+            document.getElementById('cmd-terminal').value = '';
+            map.flyTo([lat, lng], 8, { animate: true, duration: 1.5 });
+            setTimeout(() => {
+                let layer = flightLayer.getLayer(layerId);
+                if (layer) layer.openPopup();
+            }, 1600);
+        }
+        
+        function clickAssetSuggestion(lat, lng, name) {
+            document.getElementById('cmd-suggestions').style.display = 'none';
+            document.getElementById('cmd-terminal').value = '';
+            map.flyTo([lat, lng], 14, { animate: true, duration: 1.5 });
+            setTimeout(() => {
+                openDossier(name, 'STATIC ASSET', 'SEARCH RESULT', [lat, lng]);
+            }, 1600);
+        }
+        
+        document.addEventListener('click', function(e) {
+            if (e.target.id !== 'cmd-terminal') {
+                let box = document.getElementById('cmd-suggestions');
+                if (box) box.style.display = 'none';
+            }
+        });
+
         function executeCoordinateDrop(lat, lng) {
             map.flyTo([lat, lng], 12, { animate: true, duration: 2 });
             
@@ -382,9 +471,27 @@
         }
 
         function executeAssetSearch(query) {
+            // 1. First, try to find a matching flight
+            if (typeof flightLayer !== 'undefined' && map.hasLayer(flightLayer)) {
+                let foundFlight = false;
+                flightLayer.eachLayer(layer => {
+                    if (layer.flightData && !foundFlight) {
+                        const f = layer.flightData;
+                        if (f.callsign.toLowerCase().includes(query) || f.type.toLowerCase().includes(query) || f.reg.toLowerCase().includes(query)) {
+                            let lat = layer.getLatLng().lat;
+                            let lng = layer.getLatLng().lng;
+                            clickSuggestion(lat, lng, layer._leaflet_id);
+                            foundFlight = true;
+                        }
+                    }
+                });
+                if (foundFlight) return; // Exit if we found and flew to a flight
+            }
+
+            // 2. If no flight matches, search static assets
             let allFeatures = [];
-            if(document.getElementById('layer-morocco').checked) allFeatures = allFeatures.concat(moroccoData.features);
-            if(document.getElementById('layer-algeria').checked) allFeatures = allFeatures.concat(algeriaData.features);
+            if(document.getElementById('layer-morocco') && document.getElementById('layer-morocco').checked && typeof moroccoData !== 'undefined') allFeatures = allFeatures.concat(moroccoData.features);
+            if(document.getElementById('layer-algeria') && document.getElementById('layer-algeria').checked && typeof algeriaData !== 'undefined') allFeatures = allFeatures.concat(algeriaData.features);
             
             let bestMatch = null;
             
@@ -405,7 +512,7 @@
                     openDossier(bestMatch.properties.name, getType(bestMatch), 'SEARCH RESULT', [lat, lng]);
                 }, 2200);
             } else {
-                alert('ASSET NOT FOUND OR NOT CURRENTLY VISIBLE ON ACTIVE LAYERS.');
+                alert('ASSET/FLIGHT NOT FOUND OR NOT CURRENTLY VISIBLE.\n\nMake sure the correct layer (e.g., Live Air Traffic) is checked!');
             }
         }
 
@@ -579,7 +686,8 @@
         function fetchFlights() {
             // Get current map view boundaries dynamically for "worldwide" support
             let b = map.getBounds();
-            let n = b.getNorth(), s = b.getSouth(), w = b.getWest(), e = b.getEast();
+            // Add a huge padding so other planes don't disappear when you zoom in on one
+            let n = b.getNorth() + 15, s = b.getSouth() - 15, w = b.getWest() - 20, e = b.getEast() + 20;
             // Clamp coordinates to valid Earth bounds
             if(n > 90) n = 90; if(s < -90) s = -90;
             if(w < -180) w = -180; if(e > 180) e = 180;
@@ -631,6 +739,10 @@
                     });
 
                     const marker = L.marker([lat, lon], {icon: icon});
+                    let safeType = type ? type.toString().toUpperCase() : 'UNKNOWN';
+                    let safeReg = reg ? reg.toString().toUpperCase() : 'N/A';
+                    let safeCallsign = callsign ? callsign.toString().toUpperCase() : 'UNKNOWN';
+                    marker.flightData = { callsign: safeCallsign, type: safeType, reg: safeReg, isRMAF: isRMAF, isMil: isMil };
                     marker.flightData = { callsign: callsign.toUpperCase(), type: type.toUpperCase(), reg: reg.toUpperCase(), isRMAF: isRMAF, isMil: isMil };
                     
                     // Change tooltip color for RMAF
