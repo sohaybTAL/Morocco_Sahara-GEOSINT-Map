@@ -172,6 +172,10 @@
               <label><input type="checkbox" id="layer-flights"> <span class="legend-color" style="background:#ffff00; border:none;"></span>Live Air Traffic (ADS-B)</label>
           </div>
           <div id="flight-status" style="font-size:10px; color:#555; margin-top:2px; margin-left:22px; display:none;">SCANNING...</div>
+          <div id="flight-legend" style="font-size:11px; color:#aaa; margin-top:5px; margin-left:22px; display:none; line-height:1.5; border-left: 1px dashed #444; padding-left: 5px;">
+              <span style="color:#ffff00; text-shadow:0 0 3px #000; font-size:12px;">&#9650;</span> Civilian<br>
+              <span style="color:#ff4400; text-shadow:0 0 3px #000; font-size:12px;">&#9650;</span> Military / Alert
+          </div>
       </div>
 
     <!-- Hardware Dossier -->
@@ -650,15 +654,18 @@
 
         document.getElementById('layer-flights').addEventListener('change', function(e) {
             const statusEl = document.getElementById('flight-status');
+            const legendEl = document.getElementById('flight-legend');
             if (e.target.checked) {
                 flightLayer.addTo(map);
                 statusEl.style.display = 'block';
+                if (legendEl) legendEl.style.display = 'block';
                 statusEl.innerText = 'SCANNING...';
                 fetchFlights();
                 flightInterval = setInterval(fetchFlights, 30000);
             } else {
                 map.removeLayer(flightLayer);
                 statusEl.style.display = 'none';
+                if (legendEl) legendEl.style.display = 'none';
                 if (flightInterval) { clearInterval(flightInterval); flightInterval = null; }
             }
         });
