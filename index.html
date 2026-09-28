@@ -202,7 +202,7 @@
       <script src="map_data.js"></script>
     
     <script>
-        const map = L.map('map', { zoomControl: false }).setView([28.0, -5.0], 6);
+        const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([28.0, -5.0], 6);
         L.control.zoom({ position: 'topleft' }).addTo(map);
 
                 // Bing QuadKey implementation
