@@ -563,8 +563,8 @@
         let flightInterval = null;
 
         function fetchFlights() {
-            // Cover the full Sahara region: center ~28N, -5E, radius 1200km
-            const url = 'https://opensky-network.org/api/states/all?lamin=18&lomin=-20&lamax=38&lomax=15';
+            // Using AllOrigins CORS proxy since OpenSky blocks direct browser fetch on Netlify
+            const url = 'https://api.allorigins.win/raw?url=' + encodeURIComponent('https://opensky-network.org/api/states/all?lamin=18&lomin=-20&lamax=38&lomax=15');
             fetch(url)
                 .then(r => r.json())
                 .then(data => {
