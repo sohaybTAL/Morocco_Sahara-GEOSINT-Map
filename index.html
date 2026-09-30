@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,10 +9,10 @@
         body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; }
         #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; }
         
-        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(17,17,17,0.95); border-right: 2px solid #333; z-index: 1000; padding: 20px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); }
+        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(15, 28, 15, 0.95); border-right: 2px solid #333; z-index: 1000; padding: 20px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); }
         h1 { font-size: 18px; color: #fff; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 0; }
         h2 { font-size: 14px; color: #aaa; margin-top: 20px; text-transform: uppercase; border-bottom: 1px solid #222; padding-bottom: 5px; }
-        .stat-box { background: rgba(34,34,34,0.8); padding: 10px; margin-bottom: 10px; border: 1px solid #444; border-left: 4px solid #0f0; }
+        .stat-box { background: rgba(25, 45, 25, 0.8); padding: 10px; margin-bottom: 10px; border: 1px solid #444; border-left: 4px solid #0f0; }
         .stat-box.alg { border-left-color: #f00; color: #ff5555; }
         .stat-box.mor { border-left-color: #0f0; color: #55ff55; }
         .control-group { margin-top: 15px; }
@@ -21,7 +21,7 @@
         input[type="checkbox"] { margin-right: 10px; accent-color: #0f0; cursor: pointer; }
         .legend-color { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1px solid #555; vertical-align: middle; }
         
-        #dossier-panel { position: absolute; top: 20px; right: -400px; width: 350px; background: rgba(10,10,10,0.95); border: 1px solid #0f0; z-index: 1001; padding: 20px; color: #fff; box-shadow: -5px 5px 15px rgba(0,0,0,0.8); transition: right 0.3s ease; backdrop-filter: blur(5px); }
+        #dossier-panel { position: absolute; top: 20px; right: -400px; width: 350px; background: rgba(15, 28, 15, 0.95); border: 1px solid #0f0; z-index: 1001; padding: 20px; color: #fff; box-shadow: -5px 5px 15px rgba(0,0,0,0.8); transition: right 0.3s ease; backdrop-filter: blur(5px); }
         #dossier-panel.open { right: 20px; }
         #dossier-close { float: right; color: #f00; cursor: pointer; font-weight: bold; border: 1px solid #f00; padding: 2px 5px; }
         .dossier-img { width: 100%; height: 150px; background: #333; margin: 10px 0; border: 1px solid #555; object-fit: cover; }
@@ -44,7 +44,7 @@
         /* LOADING SCREEN */
         #loading-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 99999;
+            background: #0f1c0f; z-index: 99999;
             display: flex; flex-direction: column;
             align-items: center; justify-content: center;
             font-family: 'Courier New', monospace;
@@ -82,6 +82,30 @@
             animation: blink 1s step-end infinite;
         }
         @keyframes blink { 50% { opacity: 0; } }
+
+        @keyframes sonar-ping {
+            0% { transform: scale(0.2); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+        }
+        .custom-target-anim {
+            pointer-events: none;
+        }
+        .target-ring {
+            position: absolute;
+            width: 50px; height: 50px;
+            border: 2px solid #0f0;
+            border-radius: 70%;
+            top: -25px; left: -25px;
+            animation: sonar-ping 1.2s infinite cubic-bezier(0, 0, 0.2, 1);
+        }
+        .target-center {
+            position: absolute;
+            width: 12px; height: 12px;
+            background: #0f0;
+            border-radius: 70%;
+            top: -6px; left: -6px;
+            box-shadow: 0 0 10px #0f0;
+        }
 </style>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-P101NDZ6DC"></script>
@@ -104,18 +128,20 @@
     </div>
 
     <!-- Briefing Modal -->
-    <div id="briefing-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; background: rgba(5,5,5,0.95); border: 2px solid #0f0; z-index: 9999; padding: 25px; color: #fff; font-family: 'Courier New', monospace; box-shadow: 0 0 30px rgba(0,255,31,0.4); backdrop-filter: blur(5px);">
+    
+
+
+    
+    <!-- Briefing Modal -->
+    <div id="briefing-modal" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 450px; background: rgba(15, 28, 15, 0.95); border: 2px solid #0f0; z-index: 9999; padding: 25px; color: #fff; font-family: 'Courier New', monospace; box-shadow: 0 0 30px rgba(0,255,31,0.4); backdrop-filter: blur(5px);">
         <h2 style="color: #0f0; text-align: center; border-bottom: 1px dashed #0f0; padding-bottom: 10px; margin-top: 0; letter-spacing: 2px;">[ MISSION BRIEFING ]</h2>
         <p style="color: #ddd; font-size: 14px; text-align: center;">Welcome to the OSINT Command Center.</p>
         <ul style="color: #aaa; font-size: 13px; line-height: 1.8; padding-left: 20px;">
             <li><strong style="color: #0f0;">COMMAND TERMINAL:</strong> Use the sidebar terminal to search for specific bases (e.g., "Tindouf") or paste raw GPS coordinates to drop a targeting crosshair.</li>
             <li><strong style="color: #0f0;">COORDINATE EXTRACTION:</strong> Right-click anywhere on the map to instantly copy exact geographic coordinates to your clipboard.</li>
-            <li><strong style="color: #0f0;">LIVE TERMINATOR:</strong> Enable the Terminator layer to track the live Day/Night shadow moving across the Sahara in real-time.</li>
         </ul>
         <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
     </div>
-
-
     <div id="sidebar">
         <h1 style='text-align: center;'>[Top Secret] GeoINT</h1>
         <div style="margin-bottom: 20px; border-bottom: 1px dashed #333; padding-bottom: 15px; font-size: 14px; color: #ffffff; text-align: center; letter-spacing: 2px; line-height: 1.5;">
@@ -175,7 +201,7 @@
 
         <h2>Threat Assessment</h2>
         <div class="control-group">
-            <label><input type="checkbox" id="layer-sam-threat" checked> <span class="legend-color" style="background:transparent; border:1px solid #f00; border-radius:50%"></span>Show Verified SAM Rings</label>
+            <label><input type="checkbox" id="layer-sam-threat" checked> <span class="legend-color" style="background:transparent; border:1px solid #f00; border-radius: 70%"></span>Show Verified SAM Rings</label>
         </div>
           <div class="control-group" style="margin-top: 10px;">
               <label><input type="checkbox" id="layer-labels" checked> <span class="legend-color" style="background:transparent; border:1px dashed #fff;"></span>Map Borders & City Labels</label>
@@ -203,8 +229,7 @@
         <div style="font-size: 11px; color: #ddd; margin-top: 5px; padding: 5px; background: #222; border-left: 2px solid #0f0;" id="d_intel">
             ...
         </div>
-        <br>
-        <button onclick="runLineOfSight()" style="width:100%; background:#0f0; color:#000; border:none; padding:8px; cursor:pointer; font-weight:bold; font-family:Courier New;">[EXECUTE RADAR LINE-OF-SIGHT]</button>
+        
     </div>
 
     <div id="map"></div>
@@ -214,7 +239,20 @@
       <script src="map_data.js"></script>
     
     <script>
-        const map = L.map('map', { zoomControl: false, preferCanvas: true }).setView([28.0, -5.0], 6);
+        const map = L.map('map', { zoomControl: false, preferCanvas: true, minZoom: 3, maxBounds: [[-90, -180], [90, 180]], maxBoundsViscosity: 1.0 }).setView([28.0, -5.0], 6);
+
+        let activeSelectionMarker = null;
+        function setTargetLock(lat, lng, color = '#0f0') {
+            if (activeSelectionMarker) {
+                map.removeLayer(activeSelectionMarker);
+            }
+            let icon = L.divIcon({
+                className: 'custom-target-anim',
+                html: `<div class="target-ring" style="border-color:${color};"></div><div class="target-center" style="background:${color}; box-shadow:0 0 10px ${color};"></div>`,
+                iconSize: [0, 0]
+            });
+            activeSelectionMarker = L.marker([lat, lng], {icon: icon, zIndexOffset: 10000}).addTo(map);
+        }
         L.control.zoom({ position: 'topleft' }).addTo(map);
 
                 // Bing QuadKey implementation
@@ -233,11 +271,11 @@
         });
 
         const providers = {
-            esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri', maxZoom: 18 }),
-            google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20 }),
-            bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19 }),
-            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17 }),
-            sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2024)', maxZoom: 18 })
+            esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri', maxZoom: 18, noWrap: true }),
+            google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20, noWrap: true }),
+            bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19, noWrap: true }),
+            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17, noWrap: true }),
+            sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2024)', maxZoom: 18, noWrap: true })
         };
         
         let currentProvider = providers.esri;
@@ -266,32 +304,71 @@
 
         function openDossier(name, type, country, latlng) {
             currentAsset = latlng;
+            if (latlng) setTargetLock(latlng[0], latlng[1], '#0f0');
             document.getElementById('d_title').innerText = name;
             document.getElementById('d_type').innerText = type;
             document.getElementById('d_country').innerText = country;
             
-            let img = 'https://upload.wikimedia.org/wikipedia/commons/c/ca/Empty_image.png/120px-Empty_image.png';
-            let intel = 'Standard military installation. Awaiting further satellite confirmation.';
+            // Set the appropriate category icon for the generic fallback
+            let img = 'icon_installation.svg';
+            if (type === 'SAM') img = 'icon_sam.svg';
+            else if (type === 'RADAR' || type === 'EWR' || type === 'EW') img = 'icon_radar.svg';
+            else if (type === 'AIRBASE') img = 'icon_airbase.svg';
+            else if (type === 'DEPOT' || type === 'RANGE') img = 'icon_depot.svg';
+            else if (type === 'DAM') img = 'icon_dam.svg';
+            else if (type === 'WALL/TRENCH') img = 'icon_wall.svg';
+            else if (type === 'AAA') img = 'placeholder.png'; // Using your custom AAA silhouette
             
-            if(type === 'SAM') {
-                let n = name.toUpperCase();
-                if(n.includes('SD50')) { intel = 'Sky Dragon 50 (SD50) Surface-to-Air Missile System (50km range). Verified in data.'; }
-                else if(n.includes('S300')) { intel = 'S-300 Surface-to-Air Missile System (~150km range). Verified in data.'; }
-                else if(n.includes('BUK_PANTSIR')) { intel = 'Buk / Pantsir Point Defense System (~45km range). Verified in data.'; }
-                else if(n.includes('BUK')) { intel = 'Buk Surface-to-Air Missile System (~45km range). Verified in data.'; }
-                else if(n.includes('SA2')) { intel = 'SA-2 Surface-to-Air Missile System (~45km range). Verified in data.'; }
-                else if(n.includes('SA3')) { intel = 'SA-3 Surface-to-Air Missile System (~35km range). Verified in data.'; }
-                else { intel = 'Surface-to-Air Missile System. Model not specified in raw data.'; }
-            } else if(type === 'RADAR' || type === 'EWR') {
-                img = 'https://upload.wikimedia.org/wikipedia/commons/4/4c/AN-TPS-75_radar_antenna.jpg';
-                intel = 'Radar / Early Warning array.';
-            } else if(type === 'AIRBASE') {
-                intel = 'Strategic Airbase.';
-            } else if(type === 'DAM') {
-                img = 'https://upload.wikimedia.org/wikipedia/commons/thumb/1/1d/Barrage_Bin_El_Ouidane.jpg/640px-Barrage_Bin_El_Ouidane.jpg';
-                intel = 'Strategic Water Infrastructure.';
+            let intel = 'Asset identified. Awaiting further high-resolution satellite confirmation.';
+            
+            let n = name.toUpperCase();
+            
+            // --- STRICT EXACT NAME MATCHING ---
+            // Overrides the generic category icon if you specifically named the hardware
+            if (n.includes('M167 VADS')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/8/8d/M167_Vulcan_Air_Defense_System_%28VADS%29.jpg';
+                intel = 'M167 Vulcan Air Defense System (VADS). 20mm rotary cannon for point defense.';
+            } else if (n.includes('TYPE90') || n.includes('TYPE 90')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/9/94/Oerlikon_35_mm_twin_cannon_at_Payerne_airbase%2C_Switzerland_%28Ank_Kumar%29_02.jpg';
+                intel = 'Type 90 Anti-Aircraft Artillery. 35mm twin-barrel kinetic defense.';
+            } else if (n.includes('DRONE') || n.includes('UAV')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/MQ-9_Reaper_in_flight_%282007%29.jpg';
+                intel = 'UAV / Drone Airbase facility. Equipped for launch, recovery, and control of unmanned assets.';
+            } else if (n === 'RADAR_SA2' || n.includes('FAN SANG') || n.includes('FAN SONG')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/9/99/Fan_Song_fire_control_radar_of_the_SA-2_SAM-system.JPEG';
+                intel = 'Fan Song Fire Control Radar. Associated with SA-2 guidance.';
+            } else if (n.includes('SA2') || n.includes('SA-2')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/4/49/20180328_SA-2_Guideline_Udvar-Hazy.jpg';
+                intel = 'S-75 Dvina (SA-2) High-altitude air defense system.';
+            } else if (n.includes('SA3') || n.includes('SA-3')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/4/49/20180328_SA-2_Guideline_Udvar-Hazy.jpg'; 
+                intel = 'S-125 Neva (SA-3) Low/Medium-altitude air defense system.';
+            } else if (n.includes('S300') || n.includes('S-300')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/a/af/MoscowParade2009_7.jpg';
+                intel = 'S-300 Long-Range Surface-to-Air Missile System (~150km range). Tier-1 Strategic capability.';
+            } else if (n.includes('BUK') || n.includes('PANTSIR')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/8/8f/ZRK_BUK_M1_2005_G1.jpg';
+                intel = 'Buk / Pantsir Point Defense System (~45km range). Highly mobile track-based air defense.';
+            } else if (n.includes('SD50') || n.includes('HQ-16') || n.includes('HQ16')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/6/60/HQ-16A_Surface-to-air_missiles_20170919.jpg';
+                intel = 'Sky Dragon 50 (SD50) Surface-to-Air Missile System (50km range). Medium-range air defense asset.';
+            } else if (n.includes('BIGBIRD') || n.includes('BIG BIRD')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/a/af/MoscowParade2009_7.jpg';
+                intel = '64N6E Big Bird Target Acquisition Radar. Central component of the S-300 battery.';
+            } else if (n.includes('BARLOCK') || n.includes('SPOON REST') || n.includes('THIN SKIN')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/a/a1/P37_Bar_Lock.jpg';
+                intel = 'P-37 / P-12 Early Warning Radar Node.';
+            } else if (n.includes('MSSR')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/3/32/Ssr_coelpin.jpg';
+                intel = 'Monopulse Secondary Surveillance Radar (MSSR). ATC and Identification Friend or Foe (IFF).';
+            } else if (n.includes('DWL-002') || n.includes('DWL002')) {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Sri_Lanka_Military_0051.jpg';
+                intel = 'DWL-002 Passive Emitter Tracking Radar System. Detects stealth and stealth-like signatures.';
+            } else if (n === 'BIN EL OUIDANE DAM') {
+                img = 'https://upload.wikimedia.org/wikipedia/commons/1/1d/Barrage_Bin_El_Ouidane.jpg';
+                intel = 'Strategic Water Infrastructure. Critical resource management facility.';
             }
-
+            
             document.getElementById('d_img').src = img;
             document.getElementById('d_intel').innerText = intel;
             document.getElementById('dossier-panel').classList.add('open');
@@ -324,6 +401,7 @@
         // -------------------------
         // FEATURE: COORDINATE EXTRACTION (RIGHT-CLICK)
         // -------------------------
+        map.on('click', function(e) { if(activeSelectionMarker) map.removeLayer(activeSelectionMarker); });
         map.on('contextmenu', function(e) {
             let lat = e.latlng.lat.toFixed(5);
             let lng = e.latlng.lng.toFixed(5);
@@ -426,6 +504,7 @@
         
         function clickSuggestion(lat, lng, layerId) {
             document.getElementById('cmd-suggestions').style.display = 'none';
+            setTargetLock(lat, lng, '#0ff');
             document.getElementById('cmd-terminal').value = '';
             map.flyTo([lat, lng], 8, { animate: true, duration: 1.5 });
             setTimeout(() => {
@@ -458,7 +537,7 @@
             // Draw a cool targeting crosshair
             let icon = L.divIcon({
                 className: 'target-crosshair',
-                html: '<div style="width: 40px; height: 40px; border: 2px solid #f00; border-radius: 50%; position: relative;"><div style="position: absolute; top: 19px; left: -10px; width: 60px; height: 2px; background: #f00;"></div><div style="position: absolute; top: -10px; left: 19px; width: 2px; height: 60px; background: #f00;"></div></div>',
+                html: '<div style="width: 40px; height: 40px; border: 2px solid #f00; border-radius: 70%; position: relative;"><div style="position: absolute; top: 19px; left: -10px; width: 60px; height: 2px; background: #f00;"></div><div style="position: absolute; top: -10px; left: 19px; width: 2px; height: 60px; background: #f00;"></div></div>',
                 iconSize: [40, 40],
                 iconAnchor: [20, 20]
             });
@@ -492,6 +571,9 @@
             let allFeatures = [];
             if(document.getElementById('layer-morocco') && document.getElementById('layer-morocco').checked && typeof moroccoData !== 'undefined') allFeatures = allFeatures.concat(moroccoData.features);
             if(document.getElementById('layer-algeria') && document.getElementById('layer-algeria').checked && typeof algeriaData !== 'undefined') allFeatures = allFeatures.concat(algeriaData.features);
+            if(document.getElementById('layer-mauritania') && document.getElementById('layer-mauritania').checked && typeof mauritaniaData !== 'undefined') allFeatures = allFeatures.concat(mauritaniaData.features);
+            if(document.getElementById('layer-spain') && document.getElementById('layer-spain').checked && typeof spainData !== 'undefined') allFeatures = allFeatures.concat(spainData.features);
+            if(document.getElementById('layer-dams') && document.getElementById('layer-dams').checked && typeof damsData !== 'undefined') allFeatures = allFeatures.concat(damsData.features);
             
             let bestMatch = null;
             
@@ -502,29 +584,30 @@
                 }
             }
             
-            if (bestMatch && bestMatch.geometry.type === 'Point') {
-                let lat = bestMatch.geometry.coordinates[1];
-                let lng = bestMatch.geometry.coordinates[0];
-                map.flyTo([lat, lng], 14, { animate: true, duration: 2 });
+            if (bestMatch) {
+                let lat, lng;
+                if (bestMatch.geometry.type === 'Point') {
+                    lat = bestMatch.geometry.coordinates[1];
+                    lng = bestMatch.geometry.coordinates[0];
+                } else if (bestMatch.geometry.type === 'LineString') {
+                    lat = bestMatch.geometry.coordinates[0][1];
+                    lng = bestMatch.geometry.coordinates[0][0];
+                } else if (bestMatch.geometry.type === 'Polygon') {
+                    lat = bestMatch.geometry.coordinates[0][0][1];
+                    lng = bestMatch.geometry.coordinates[0][0][0];
+                }
                 
-                // Simulate clicking it to open dossier
-                setTimeout(() => {
-                    openDossier(bestMatch.properties.name, getType(bestMatch), 'SEARCH RESULT', [lat, lng]);
-                }, 2200);
-            } else {
+                if (lat && lng) {
+                    map.flyTo([lat, lng], 14, { animate: true, duration: 2 });
+                    
+                    
+                    return;
+                }
+            }
+            
+            if (!bestMatch) {
                 alert('ASSET/FLIGHT NOT FOUND OR NOT CURRENTLY VISIBLE.\n\nMake sure the correct layer (e.g., Live Air Traffic) is checked!');
             }
-        }
-
-        function runLineOfSight() {
-
-            if(!currentAsset) return;
-            losLayer.clearLayers();
-            L.circle(currentAsset, {
-                color: '#00ff1f', fillColor: '#00ff1f', fillOpacity: 0.2, radius: 150000,
-                dashArray: '10, 20', className: 'pulse'
-            }).addTo(losLayer);
-            map.flyTo(currentAsset, 8, { duration: 1.5 });
         }
 
         const datMor = typeof moroccoData !== 'undefined' ? moroccoData : {features:[]};
@@ -557,7 +640,7 @@
                 
                 // Only show permanent label if asset has a real name
                 if(name) {
-                    l.bindTooltip(name, {permanent: true, direction: 'right', className: labelClass, offset: [5, 0]});
+                    l.bindTooltip(name, {permanent: true, interactive: true, direction: 'right', className: labelClass, offset: [5, 0]});
                 }
                 l.on('click', () => openDossier(name || 'UNNAMED ASSET', type, country, [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
 
@@ -614,7 +697,7 @@
                 if(document.getElementById('layer-morocco').checked) {
                     L.geoJSON(filterFeatures(datMor.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#00ff1f'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#00ff1f', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', fillColor: f.properties.stroke || '#00ff1f', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
                     }).addTo(moroccoLayer);
                 }
@@ -622,7 +705,7 @@
                 if(document.getElementById('layer-algeria').checked) {
                     L.geoJSON(filterFeatures(datAlg.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ff0000'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ff0000', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', fillColor: f.properties.stroke || '#ff0000', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
                     }).addTo(algeriaLayer);
                 }
@@ -630,7 +713,7 @@
                 if(document.getElementById('layer-spain').checked) {
                     L.geoJSON(filterFeatures(datSpa.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ff00ff'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ff00ff', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', fillColor: f.properties.stroke || '#ff00ff', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
                     }).addTo(spainLayer);
                 }
@@ -638,14 +721,14 @@
                 if(document.getElementById('layer-mauritania').checked) {
                     L.geoJSON(filterFeatures(datMau.features), {
                         style: (f) => ({ color: f.properties.stroke || (f.geometry.type === 'Polygon' ? '#000000' : '#ffff00'), weight: f.geometry.type === 'Polygon' ? 3 : 2, opacity: 0.8 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: f.properties.stroke || '#ffff00', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', fillColor: f.properties.stroke || '#ffff00', fillOpacity: 1 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
                     }).addTo(mauritaniaLayer);
                 }
                 
                 if(document.getElementById('layer-dams').checked) {
                     L.geoJSON(datDam.features, {
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 5, color: '#000', fillColor: '#00ffff', fillOpacity: 1 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', fillColor: '#00ffff', fillOpacity: 1 }),
                         onEachFeature: (f, l) => {
                             l.bindTooltip(f.properties.name, {permanent: true, direction: 'right', className: 'base-label', offset: [5, 0]});
                             l.bindPopup(`<div class="custom-popup"><strong>[${f.properties.name}]</strong><br>Type: Strategic Dam / Water Asset</div>`);
@@ -696,6 +779,12 @@
             window.processFlights = function(data) {
                 flightLayer.clearLayers();
                 let count = 0;
+                
+                // Get current zoom to determine Level of Detail (LOD)
+                const currentZoom = map.getZoom();
+                // If zoomed out far (zoom <= 6), use highly optimized canvas dots instead of heavy DOM triangles
+                const useSimpleDots = (currentZoom <= 6);
+                
                 for (let key in data) {
                     if (key === 'full_count' || key === 'version') continue;
                     count++;
@@ -731,29 +820,45 @@
                         tagHtml = `<span style="color:#ff4400; font-weight:bold;">** MILITARY / ALERT **</span><br>`;
                     }
 
-                    const icon = L.divIcon({
-                        className: '',
-                        html: `<div style="transform:rotate(${hdg}deg); color:${color}; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>`,
-                        iconSize: [14, 14],
-                        iconAnchor: [7, 7]
-                    });
+                    let marker;
+                    let isImportant = isRMAF || isMil;
+                    
+                    // --- HYBRID RENDERING ENGINE ---
+                    // 1. If military/RMAF, OR if zoomed in closer, draw the full rotated DOM triangle
+                    // 2. If standard commercial plane AND zoomed out, draw a blazing fast Canvas circle
+                    if (useSimpleDots && !isImportant) {
+                        marker = L.circleMarker([lat, lon], {
+                            radius: 2,
+                            color: color,
+                            fillColor: color,
+                            fillOpacity: 0.8,
+                            weight: 1,
+                            interactive: true // Keep clickable
+                        });
+                    } else {
+                        const icon = L.divIcon({
+                            className: '',
+                            html: `<div style="transform:rotate(${hdg}deg); color:${color}; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>`,
+                            iconSize: [14, 14],
+                            iconAnchor: [7, 7]
+                        });
+                        marker = L.marker([lat, lon], {icon: icon});
+                    }
 
-                    const marker = L.marker([lat, lon], {icon: icon});
                     let safeType = type ? type.toString().toUpperCase() : 'UNKNOWN';
                     let safeReg = reg ? reg.toString().toUpperCase() : 'N/A';
                     let safeCallsign = callsign ? callsign.toString().toUpperCase() : 'UNKNOWN';
                     marker.flightData = { callsign: safeCallsign, type: safeType, reg: safeReg, isRMAF: isRMAF, isMil: isMil };
-                    marker.flightData = { callsign: callsign.toUpperCase(), type: type.toUpperCase(), reg: reg.toUpperCase(), isRMAF: isRMAF, isMil: isMil };
                     
-                    // Change tooltip color for RMAF
-                    let tooltipClass = isRMAF ? 'base-label mor-label' : 'base-label';
-                    marker.bindTooltip(displayCallsign, {permanent: false, direction: 'right', className: tooltipClass, offset: [8, 0]});
+                    // Only bind hover tooltips to important planes OR when zoomed in to save memory
+                    if (!useSimpleDots || isImportant) {
+                        let tooltipClass = isRMAF ? 'base-label mor-label' : 'base-label';
+                        marker.bindTooltip(displayCallsign, {permanent: false, direction: 'right', className: tooltipClass, offset: [8, 0]});
+                    }
                     
-                    // Create FlightRadar24 Link
                     let fr24Link = `https://www.flightradar24.com/${callsign}/${key}`;
-                    
-                    // Construct detailed popup
                     let vspdStr = vspd > 0 ? `+${vspd} fpm` : `${vspd} fpm`;
+                    
                     let popupHtml = `<div style="font-family:Courier New; background:#000; color:#0f0; padding:8px; border:1px solid #0f0; font-size:12px; width: 220px; line-height: 1.4;">` +
                         `<strong style="color:${color}; font-size: 14px;">[${displayCallsign}]</strong><br>` +
                         tagHtml +
@@ -775,12 +880,16 @@
                         `</div>`;
                     
                     marker.bindPopup(popupHtml);
+                    marker.on('popupopen', function() {
+                        setTargetLock(lat, lon, '#0ff');
+                    });
+                    
                     marker.addTo(flightLayer);
                 }
+                
                 const statusEl = document.getElementById('flight-status');
                 if (statusEl) statusEl.innerText = count + ' AIRCRAFT IN VIEW';
             };
-
             const script = document.createElement('script');
             // Fetch using dynamic map boundaries
             script.src = `https://data-cloud.flightradar24.com/zones/fcgi/feed.js?bounds=${boundsStr}&faa=1&mlat=1&flarm=1&adsb=1&gnd=1&air=1&vehicles=1&estimated=1&maxage=14400&gliders=1&stats=1&callback=processFlights`;
