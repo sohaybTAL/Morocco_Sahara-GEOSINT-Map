@@ -108,13 +108,13 @@
         }
 </style>
     <!-- Google tag (gtag.js) -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-P101NDZ6DC"></script>
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9RQNR5KDQ2"></script>
     <script>
       window.dataLayer = window.dataLayer || [];
       function gtag(){dataLayer.push(arguments);}
       gtag('js', new Date());
 
-      gtag('config', 'G-P101NDZ6DC');
+      gtag('config', 'G-9RQNR5KDQ2');
     </script>
 </head>
 <body>
@@ -139,11 +139,18 @@
         <ul style="color: #aaa; font-size: 13px; line-height: 1.8; padding-left: 20px;">
             <li><strong style="color: #0f0;">COMMAND TERMINAL:</strong> Use the sidebar terminal to search for specific bases (e.g., "Tindouf") or paste raw GPS coordinates to drop a targeting crosshair.</li>
             <li><strong style="color: #0f0;">COORDINATE EXTRACTION:</strong> Right-click anywhere on the map to instantly copy exact geographic coordinates to your clipboard.</li>
+              <li><strong style="color: #0f0;">FULLSCREEN MODE:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">F</strong> key on your keyboard at any time to toggle full screen.</li>
         </ul>
         <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
     </div>
     <div id="sidebar">
         <h1 style='text-align: center;'>[Top Secret] GeoINT</h1>
+
+          <div style="text-align: center; margin-top: 10px; margin-bottom: 20px;">
+              <button onclick="toggleLanguage('en')" id="btn-en" style="background: #0f0; color: #000; border: 1px solid #0f0; padding: 2px 8px; font-weight: bold; font-family: 'Courier New'; cursor: pointer;">EN</button>
+              <button onclick="toggleLanguage('fr')" id="btn-fr" style="background: #000; color: #0f0; border: 1px solid #0f0; padding: 2px 8px; font-family: 'Courier New'; cursor: pointer;">FR</button>
+          </div>
+
         <div style="margin-bottom: 20px; border-bottom: 1px dashed #333; padding-bottom: 15px; font-size: 14px; color: #ffffff; text-align: center; letter-spacing: 2px; line-height: 1.5;">
             [ SYSTEM ARCHITECT ]<br>
             <span style="color: #0f0; font-weight: bold; font-size: 16px;">ElMakhchouniX</span><br>
@@ -923,6 +930,108 @@
                 setTimeout(function() { ls.style.display = 'none'; }, 700);
             }
         }, 2500);
-    </script>
+    
+        // Fullscreen Toggle on F key
+        document.addEventListener('keydown', function(e) {
+            if (e.key.toLowerCase() === 'f' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+                if (!document.fullscreenElement) {
+                    if (document.documentElement.requestFullscreen) {
+                        document.documentElement.requestFullscreen();
+                    } else if (document.documentElement.webkitRequestFullscreen) { /* Safari */
+                        document.documentElement.webkitRequestFullscreen();
+                    } else if (document.documentElement.msRequestFullscreen) { /* IE11 */
+                        document.documentElement.msRequestFullscreen();
+                    }
+                } else {
+                    if (document.exitFullscreen) {
+                        document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) { /* Safari */
+                        document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) { /* IE11 */
+                        document.msExitFullscreen();
+                    }
+                }
+            }
+        });
+
+        // --- MULTILINGUAL SUPPORT (EN/FR) ---
+        const i18n = {
+            "[ MISSION BRIEFING ]": "[ RAPPORT DE MISSION ]",
+            "Welcome to the OSINT Command Center.": "Bienvenue au Centre de Commandement OSINT.",
+            "COMMAND TERMINAL:": "TERMINAL DE COMMANDE :",
+            "Use the sidebar terminal to search for specific bases (e.g., \"Tindouf\") or paste raw GPS coordinates to drop a targeting crosshair.": "Utilisez le terminal pour chercher des bases ou collez des coordonnées GPS.",
+            "COORDINATE EXTRACTION:": "EXTRACTION DE COORDONNÉES :",
+            "Right-click anywhere on the map to instantly copy exact geographic coordinates to your clipboard.": "Faites un clic droit sur la carte pour copier les coordonnées GPS exactes.",
+            "FULLSCREEN MODE:": "MODE PLEIN ÉCRAN :",
+            "Press the": "Appuyez sur la touche",
+            "key on your keyboard at any time to toggle full screen.": "à tout moment pour basculer en plein écran.",
+            "[ ACKNOWLEDGE & INITIALIZE ]": "[ ACCEPTER ET INITIALISER ]",
+            "[Top Secret] GeoINT": "[Secret Défense] GeoINT",
+            "[ SYSTEM ARCHITECT ]": "[ ARCHITECTE SYSTÈME ]",
+            "MOROCCO SAHARA GEOINT": "GÉO-RENSEIGNEMENT SAHARA MAROC",
+            "Satellite Feed": "Flux Satellite",
+            "Command Terminal": "Terminal de Commande",
+            "TACTICAL SEARCH": "RECHERCHE TACTIQUE",
+            "Tactical Overlays": "Calques Tactiques",
+            "[MOR] Morocco (Lines & Bases)": "[MAR] Maroc (Lignes & Bases)",
+            "[ALG] Algeria (Lines & Bases)": "[ALG] Algérie (Lignes & Bases)",
+            "[MRT] Mauritania (Lines)": "[MRT] Mauritanie (Lignes)",
+            "[ESP] Spain (Bases)": "[ESP] Espagne (Bases)",
+            "[FR24] Live ADS-B Flights": "[FR24] Vols ADS-B en direct",
+            "ESRI SATELLITE (DEFAULT)": "SATELLITE ESRI (DÉFAUT)",
+            "GOOGLE SATELLITE": "SATELLITE GOOGLE",
+            "BING SATELLITE": "SATELLITE BING",
+            "SENTINEL-2 (ESA 2024)": "SENTINEL-2 (ESA 2024)",
+            "TOPOGRAPHIC MAP": "CARTE TOPOGRAPHIQUE",
+            "Asset Filters": "Filtres d'Actifs",
+            "Defensive Lines / Berms": "Lignes Défensives / Murs",
+            "Airbases": "Bases Aériennes",
+            "SAM Sites": "Sites SAM (Missiles)",
+            "Radars": "Radars",
+            "Early Warning (EWR)": "Alerte Précoce (EWR)",
+            "Anti-Air (AAA)": "Anti-Aérien (AAA)",
+            "SYS_ACTIVE // SAT_LINK_SECURE": "SYSTÈME_ACTIF // LIAISON_SAT_SÉCURISÉE"
+        };
+
+        let currentLang = 'en';
+
+        function toggleLanguage(lang) {
+            if (lang === currentLang) return;
+            
+            document.getElementById('btn-en').style.background = lang === 'en' ? '#0f0' : '#000';
+            document.getElementById('btn-en').style.color = lang === 'en' ? '#000' : '#0f0';
+            document.getElementById('btn-fr').style.background = lang === 'fr' ? '#0f0' : '#000';
+            document.getElementById('btn-fr').style.color = lang === 'fr' ? '#000' : '#0f0';
+            
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+            let node;
+            while (node = walker.nextNode()) {
+                let text = node.nodeValue;
+                let trimmed = text.trim();
+                if (!trimmed) continue;
+                
+                if (lang === 'fr') {
+                    if (i18n[trimmed]) {
+                        node.nodeValue = text.replace(trimmed, i18n[trimmed]);
+                    }
+                } else {
+                    for (let enKey in i18n) {
+                        if (i18n[enKey] === trimmed) {
+                            node.nodeValue = text.replace(trimmed, enKey);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            let cmd = document.getElementById('cmd-input');
+            if (cmd) {
+                cmd.placeholder = lang === 'fr' ? 'Chercher Base ou Coller Lat,Lng...' : 'Search Base Name or Paste Lat,Lng...';
+            }
+            
+            currentLang = lang;
+        }
+
+</script>
 </body>
 </html>
