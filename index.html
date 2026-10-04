@@ -739,6 +739,7 @@
                 losLayer.clearLayers();
                 
                 let activeTypes = Array.from(document.querySelectorAll('.type-filter:checked')).map(cb => cb.value);
+                if(activeTypes.includes('DEPOT')) activeTypes.push('RANGE');
                 
                 function filterFeatures(features) {
                     let out = [];
