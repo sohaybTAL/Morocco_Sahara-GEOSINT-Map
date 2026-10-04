@@ -363,12 +363,14 @@
             // Set the appropriate category icon for the generic fallback
             let img = 'icon_installation.svg';
             if (type === 'SAM') img = 'icon_sam.svg';
-            else if (type === 'RADAR' || type === 'EWR' || type === 'EW') img = 'icon_radar.svg';
-            else if (type === 'AIRBASE') img = 'icon_airbase.svg';
-            else if (type === 'DEPOT' || type === 'RANGE') img = 'icon_depot.svg';
+            else if (type === 'RADAR') img = 'radar.webp';
+              else if (type === 'EWR' || type === 'EW') img = 'ewr.jpg';
+            else if (type === 'AIRBASE') img = 'airbasee.JPEG';
+            else if (type === 'DEPOT') img = 'depot.jpg';
+              else if (type === 'RANGE') img = 'range.jpg';
             else if (type === 'DAM') img = 'icon_dam.svg';
             else if (type === 'WALL/TRENCH') img = 'icon_wall.svg';
-            else if (type === 'AAA') img = 'placeholder.png'; // Using your custom AAA silhouette
+            else if (type === 'AAA') img = 'type_90_pg99_35mm_anti-aircraft_twin-gun_china_chinese_army_defense_industry_military_technology_013.jpg'; // Using your custom AAA silhouette
             
             let intel = 'Asset identified. Awaiting further high-resolution satellite confirmation.';
             
@@ -380,7 +382,7 @@
                 img = 'https://upload.wikimedia.org/wikipedia/commons/8/8d/M167_Vulcan_Air_Defense_System_%28VADS%29.jpg';
                 intel = 'M167 Vulcan Air Defense System (VADS). 20mm rotary cannon for point defense.';
             } else if (n.includes('TYPE90') || n.includes('TYPE 90')) {
-                img = 'https://upload.wikimedia.org/wikipedia/commons/9/94/Oerlikon_35_mm_twin_cannon_at_Payerne_airbase%2C_Switzerland_%28Ank_Kumar%29_02.jpg';
+                img = 'type_90_pg99_35mm_anti-aircraft_twin-gun_china_chinese_army_defense_industry_military_technology_013.jpg';
                 intel = 'Type 90 Anti-Aircraft Artillery. 35mm twin-barrel kinetic defense.';
             } else if (n.includes('DRONE') || n.includes('UAV')) {
                 img = 'https://upload.wikimedia.org/wikipedia/commons/b/b0/MQ-9_Reaper_in_flight_%282007%29.jpg';
@@ -395,7 +397,7 @@
                 img = 'https://upload.wikimedia.org/wikipedia/commons/4/49/20180328_SA-2_Guideline_Udvar-Hazy.jpg'; 
                 intel = 'S-125 Neva (SA-3) Low/Medium-altitude air defense system.';
             } else if (n.includes('S300') || n.includes('S-300')) {
-                img = 'https://upload.wikimedia.org/wikipedia/commons/a/af/MoscowParade2009_7.jpg';
+                img = 'S-300.avif';
                 intel = 'S-300 Long-Range Surface-to-Air Missile System (~150km range). Tier-1 Strategic capability.';
             } else if (n.includes('BUK') || n.includes('PANTSIR')) {
                 img = 'https://upload.wikimedia.org/wikipedia/commons/8/8f/ZRK_BUK_M1_2005_G1.jpg';
@@ -404,7 +406,7 @@
                 img = 'https://upload.wikimedia.org/wikipedia/commons/6/60/HQ-16A_Surface-to-air_missiles_20170919.jpg';
                 intel = 'Sky Dragon 50 (SD50) Surface-to-Air Missile System (50km range). Medium-range air defense asset.';
             } else if (n.includes('BIGBIRD') || n.includes('BIG BIRD')) {
-                img = 'https://upload.wikimedia.org/wikipedia/commons/a/af/MoscowParade2009_7.jpg';
+                img = 'S-300.avif';
                 intel = '64N6E Big Bird Target Acquisition Radar. Central component of the S-300 battery.';
             } else if (n.includes('BARLOCK') || n.includes('SPOON REST') || n.includes('THIN SKIN')) {
                 img = 'https://upload.wikimedia.org/wikipedia/commons/a/a1/P37_Bar_Lock.jpg';
@@ -673,7 +675,8 @@
             if(name.includes('RADAR')) return 'RADAR';
             if(name.includes('EWR')) return 'EWR';
             if(name.includes('AAA')) return 'AAA';
-            if(name.includes('DEPOT') || name.includes('RANGE')) return 'DEPOT';
+            if(name.includes('DEPOT')) return 'DEPOT';
+            if(name.includes('RANGE')) return 'RANGE';
             return 'INSTALLATION';
         }
 
