@@ -758,7 +758,7 @@
                 if(document.getElementById('layer-morocco').checked) {
                     L.geoJSON(filterFeatures(datMor.features), {
                         style: (f) => ({ color: getLineColor(f, '#00ff1f'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', weight: 2, fillColor: getPointColor(f, '#00ff1f'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#00ff1f'), fillOpacity: 0.8 }),
                         onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
                     }).addTo(moroccoLayer);
                 }
@@ -766,7 +766,7 @@
                 if(document.getElementById('layer-algeria').checked) {
                     L.geoJSON(filterFeatures(datAlg.features), {
                         style: (f) => ({ color: getLineColor(f, '#ff0000'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', weight: 2, fillColor: getPointColor(f, '#ff0000'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff0000'), fillOpacity: 0.8 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
                     }).addTo(algeriaLayer);
                 }
@@ -774,7 +774,7 @@
                 if(document.getElementById('layer-spain').checked) {
                     L.geoJSON(filterFeatures(datSpa.features), {
                         style: (f) => ({ color: getLineColor(f, '#ff00ff'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', weight: 2, fillColor: getPointColor(f, '#ff00ff'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff00ff'), fillOpacity: 0.8 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
                     }).addTo(spainLayer);
                 }
@@ -782,7 +782,7 @@
                 if(document.getElementById('layer-mauritania').checked) {
                     L.geoJSON(filterFeatures(datMau.features), {
                         style: (f) => ({ color: getLineColor(f, '#ffff00'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, color: '#000', weight: 2, fillColor: getPointColor(f, '#ffff00'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ffff00'), fillOpacity: 0.8 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
                     }).addTo(mauritaniaLayer);
                 }
