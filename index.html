@@ -148,7 +148,13 @@
                 box-sizing: border-box;
             }
         }
-    </style>
+    
+        .tactical-btn { background: transparent; border: 1px solid #0f0; color: #0f0; padding: 5px; font-family: 'Courier New', Courier, monospace; cursor: pointer; font-size: 11px; font-weight: bold; transition: 0.2s; width: 100%; text-align: left; }
+        .tactical-btn:hover { background: rgba(0, 255, 0, 0.2); }
+        .tactical-btn.active { background: rgba(0, 255, 0, 0.4); color: #fff; }
+        .dist-label { background: #000; color: #0ff; border: 1px solid #0ff; font-family: 'Courier New'; font-weight: bold; }
+        .leaflet-tile-pane { transition: filter 0.5s ease; }
+</style>
     <!-- Google tag (gtag.js) -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-9RQNR5KDQ2"></script>
     <script>
@@ -224,6 +230,21 @@
             <div id="cmd-suggestions" style="position: absolute; top: 32px; left: 0; width: 100%; background: #000; border: 1px solid #0f0; border-top: none; max-height: 250px; overflow-y: auto; z-index: 10000; display: none; font-family: 'Courier New', monospace; font-size: 11px;"></div>
         </div>
         
+        
+        <h2>TACTICAL TOOLS & FEEDS</h2>
+        <div style="display:flex; gap:5px; margin-bottom:10px;">
+            <button class="tactical-btn" onclick="setOptics('NORMAL')" style="text-align:center">RGB</button>
+            <button class="tactical-btn" onclick="setOptics('NVG')" style="text-align:center">NVG (Night)</button>
+            <button class="tactical-btn" onclick="setOptics('FLIR')" style="text-align:center">FLIR (Thermal)</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:5px;">
+            <button class="tactical-btn" id="btn-measure" onclick="toggleTool('MEASURE', this)">📐 MEASURE DISTANCE</button>
+            <button class="tactical-btn" id="btn-threat" onclick="toggleTool('THREAT', this)">⭕ DROP THREAT RING</button>
+            
+            
+            <button class="tactical-btn" onclick="measureLayer.clearLayers()" style="color:#f55; border-color:#f55; text-align:center; margin-top:5px;">CLEAR DRAWINGS</button>
+        </div>
+
         <h2>Doctrine Analysis</h2>
         <div class="stat-box alg">
             <strong>ALGERIA: MISSILE UMBRELLA</strong><br>SAM Sites: 32<br>Radars: 32
@@ -433,12 +454,24 @@
         }
 
 
+        
+        
+
         // -------------------------
         // FEATURE: TERMINATOR LINE
+        
+        
+
         // -------------------------
         
+        
+        
+
         // -------------------------
         // FEATURE: BORDERS & LABELS
+        
+        
+
         // -------------------------
         let labelsLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
             pane: 'markerPane', // Ensures labels stay on top of the satellite imagery
@@ -451,8 +484,14 @@
         });
 
 
+        
+        
+
         // -------------------------
         // FEATURE: COORDINATE EXTRACTION (RIGHT-CLICK)
+        
+        
+
         // -------------------------
         map.on('click', function(e) { if(activeSelectionMarker) map.removeLayer(activeSelectionMarker); });
         map.on('contextmenu', function(e) {
@@ -470,8 +509,14 @@
             });
         });
 
+        
+        
+
         // -------------------------
         // FEATURE: COMMAND TERMINAL
+
+        
+        
 
         // -------------------------
         let targetCrosshair = null;
@@ -813,8 +858,14 @@
         });
 
 
+        
+        
+
         // -------------------------
         // FEATURE: LIVE AIR TRAFFIC (ADS-B Exchange)
+        
+        
+
         // -------------------------
         const flightLayer = L.layerGroup();
         let flightInterval = null;
@@ -1094,6 +1145,62 @@
             
             currentLang = lang;
         }
+
+        // --- TACTICAL TOOLS ENGINE ---
+        function setOptics(mode) {
+            let pane = document.querySelector('.leaflet-tile-pane');
+            pane.style.filter = '';
+            if (mode === 'NVG') pane.style.filter = 'sepia(100%) hue-rotate(70deg) saturate(500%) contrast(150%) brightness(60%)';
+            if (mode === 'FLIR') pane.style.filter = 'grayscale(100%) invert(100%) contrast(150%)';
+        }
+
+        let currentTool = null;
+        let measurePoints = [];
+        let measureLayer = L.layerGroup().addTo(map);
+        let activeToolBtn = null;
+
+        function toggleTool(tool, btn) {
+            if (activeToolBtn) activeToolBtn.classList.remove('active');
+            if (currentTool === tool) {
+                currentTool = null;
+                activeToolBtn = null;
+                document.getElementById('map').style.cursor = '';
+            } else {
+                currentTool = tool;
+                activeToolBtn = btn;
+                btn.classList.add('active');
+                document.getElementById('map').style.cursor = 'crosshair';
+            }
+            measurePoints = [];
+        }
+
+        map.on('click', function(e) {
+            if (currentTool === 'MEASURE') {
+                measurePoints.push(e.latlng);
+                if (measurePoints.length === 1) {
+                    L.circleMarker(e.latlng, {radius: 4, color: '#0ff'}).addTo(measureLayer);
+                } else if (measurePoints.length === 2) {
+                    L.circleMarker(e.latlng, {radius: 4, color: '#0ff'}).addTo(measureLayer);
+                    let line = L.polyline(measurePoints, {color: '#0ff', dashArray: '5, 5'}).addTo(measureLayer);
+                    let dist = map.distance(measurePoints[0], measurePoints[1]);
+                    let km = (dist / 1000).toFixed(1);
+                    let nm = (dist / 1852).toFixed(1);
+                    line.bindTooltip(`${km} km / ${nm} NM`, {permanent: true, direction: 'center', className: 'dist-label'}).openTooltip();
+                    measurePoints = []; 
+                }
+            } else if (currentTool === 'THREAT') {
+                let rad = prompt("Enter threat radius in KM (e.g., 150 for Patriot, 400 for S-400):", "150");
+                if (rad && !isNaN(rad)) {
+                    L.circle(e.latlng, {radius: rad * 1000, color: '#ff0000', fillColor: '#ff0000', fillOpacity: 0.1, weight: 2, dashArray: '10, 10'})
+                     .bindPopup('<b style="color:red">CUSTOM THREAT RING ('+rad+' KM)</b>')
+                     .addTo(measureLayer);
+                }
+                toggleTool('THREAT', activeToolBtn);
+            }
+        });
+
+        // --- LIVE FEEDS ---
+        
 
 </script>
 </body>
