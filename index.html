@@ -164,6 +164,7 @@
 
       gtag('config', 'G-9RQNR5KDQ2');
     </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
 </head>
 <body>
 
@@ -242,7 +243,7 @@
             <button class="tactical-btn" id="btn-threat" onclick="toggleTool('THREAT', this)">⭕ DROP THREAT RING</button>
             
             
-            <button class="tactical-btn" onclick="measureLayer.clearLayers()" style="color:#f55; border-color:#f55; text-align:center; margin-top:5px;">CLEAR DRAWINGS</button>
+            <button class="tactical-btn" onclick="measureLayer.clearLayers(); if(typeof drawnItems !== 'undefined') drawnItems.clearLayers();" style="color:#f55; border-color:#f55; text-align:center; margin-top:5px;">CLEAR DRAWINGS</button>
         </div>
 
         <h2>Doctrine Analysis</h2>
@@ -282,6 +283,9 @@
           <div class="control-group" style="margin-top: 10px;">
               <label><input type="checkbox" id="layer-flights"> <span class="legend-color" style="background:#ffff00; border:none;"></span>Live Air Traffic (ADS-B)</label>
           </div>
+          <div class="control-group" style="margin-top: 10px;">
+              <label><input type="checkbox" id="layer-weather"> <span class="legend-color" style="background:#4a90e2; border:none;"></span>Live Weather Radar (RainViewer)</label>
+          </div>
           <div id="flight-status" style="font-size:10px; color:#555; margin-top:2px; margin-left:22px; display:none;">SCANNING...</div>
           <div id="flight-legend" style="font-size:11px; color:#aaa; margin-top:5px; margin-left:22px; display:none; line-height:1.5; border-left: 1px dashed #444; padding-left: 5px;">
               <span style="color:#00ff1f; text-shadow:0 0 3px #000; font-size:12px;">&#9650;</span> RMAF (Morocco)<br>
@@ -309,6 +313,7 @@
     <div class="hud-overlay pulse" style="color:#0f0; font-size:12px; font-weight:bold; text-shadow: 0 0 5px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
       <script src="map_data.js"></script>
     
     <script>
@@ -351,6 +356,58 @@
             sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2024)', maxZoom: 18, noWrap: true })
         };
         
+        
+        // ==========================================
+        // WEATHER RADAR LAYER (RainViewer)
+        // ==========================================
+        let weatherLayer = null;
+        document.getElementById('layer-weather').addEventListener('change', function(e) {
+            if (e.target.checked) {
+                fetch('https://api.rainviewer.com/public/weather-maps.json')
+                .then(response => response.json())
+                .then(data => {
+                    let past = data.radar.past;
+                    let lastPath = past[past.length - 1].path;
+                    weatherLayer = L.tileLayer('https://tilecache.rainviewer.com' + lastPath + '/256/{z}/{x}/{y}/2/1_1.png', {
+                        opacity: 0.6,
+                        zIndex: 450,
+                        attribution: 'RainViewer'
+                    }).addTo(map);
+                });
+            } else {
+                if (weatherLayer) {
+                    map.removeLayer(weatherLayer);
+                    weatherLayer = null;
+                }
+            }
+        });
+
+        // ==========================================
+        // DRAW TOOL (Leaflet.Draw)
+        // ==========================================
+        var drawnItems = new L.FeatureGroup();
+        map.addLayer(drawnItems);
+        var drawControl = new L.Control.Draw({
+            draw: {
+                polygon: { shapeOptions: { color: '#ff0000', weight: 3 } },
+                polyline: { shapeOptions: { color: '#00ff00', weight: 3 } },
+                rectangle: { shapeOptions: { color: '#0000ff', weight: 3 } },
+                circle: { shapeOptions: { color: '#ff00ff', weight: 3 } },
+                marker: true,
+                circlemarker: false
+            },
+            edit: {
+                featureGroup: drawnItems,
+                remove: true
+            }
+        });
+        map.addControl(drawControl);
+
+        map.on(L.Draw.Event.CREATED, function (event) {
+            var layer = event.layer;
+            drawnItems.addLayer(layer);
+        });
+
         let currentProvider = providers.esri;
         currentProvider.addTo(map);
 

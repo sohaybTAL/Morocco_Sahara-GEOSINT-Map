@@ -1,0 +1,8 @@
+{
+  "name": "morocco-geosint",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@vercel/functions": "^3.9.11"
+  }
+}
