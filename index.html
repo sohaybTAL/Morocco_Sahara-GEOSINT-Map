@@ -10,9 +10,48 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
         body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; }
-        #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; }
+        #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; transition: left 0.3s ease; }
+        #map.expanded { left: 0; }
         
-        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(15, 28, 15, 0.95); border-right: 2px solid #333; z-index: 1000; padding: 20px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); }
+        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(15, 28, 15, 0.95); border-right: 2px solid #333; z-index: 1000; padding: 20px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); transition: transform 0.3s ease; }
+        #sidebar.collapsed { transform: translateX(-350px); }
+
+        /* Tactical Scrollbar on Sidebar */
+        #sidebar::-webkit-scrollbar { width: 6px; }
+        #sidebar::-webkit-scrollbar-track { background: rgba(0, 20, 0, 0.5); }
+        #sidebar::-webkit-scrollbar-thumb { background: #0f0; border-radius: 3px; }
+        #sidebar::-webkit-scrollbar-thumb:hover { background: #55ff55; }
+        #sidebar { scrollbar-width: thin; scrollbar-color: #0f0 rgba(0, 20, 0, 0.5); }
+
+        /* Sidebar Toggle Tab */
+        #sidebar-toggle {
+            position: fixed;
+            top: 50%;
+            transform: translateY(-50%);
+            left: 350px;
+            z-index: 1001;
+            background: rgba(15, 28, 15, 0.95);
+            color: #0f0;
+            border: 1px solid #0f0;
+            border-left: none;
+            padding: 14px 8px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            font-weight: bold;
+            transition: left 0.3s ease, background 0.2s ease;
+            box-shadow: 2px 2px 8px rgba(0, 255, 0, 0.2);
+            user-select: none;
+            border-radius: 0 4px 4px 0;
+        }
+        #sidebar-toggle:hover {
+            background: rgba(0, 255, 0, 0.2);
+            color: #fff;
+        }
+        #sidebar-toggle.collapsed {
+            left: 0;
+            border-left: 1px solid #0f0;
+        }
         h1 { font-size: 18px; color: #fff; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 0; }
         h2 { font-size: 14px; color: #aaa; margin-top: 20px; text-transform: uppercase; border-bottom: 1px solid #222; padding-bottom: 5px; }
         .stat-box { background: rgba(25, 45, 25, 0.8); padding: 10px; margin-bottom: 10px; border: 1px solid #444; border-left: 4px solid #0f0; }
@@ -192,6 +231,10 @@
         </ul>
         <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
     </div>
+
+    <!-- Sidebar Toggle Button -->
+    <div id="sidebar-toggle" onclick="toggleSidebar()">&#9664;</div>
+
     <div id="sidebar">
         
           <div style="text-align: center; margin-bottom: 10px;">
@@ -1256,8 +1299,26 @@
             }
         });
 
-        // --- LIVE FEEDS ---
-        
+        // --- SIDEBAR TOGGLE ---
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const toggle = document.getElementById('sidebar-toggle');
+            const mapEl = document.getElementById('map');
+            
+            sidebar.classList.toggle('collapsed');
+            toggle.classList.toggle('collapsed');
+            mapEl.classList.toggle('expanded');
+            
+            if (sidebar.classList.contains('collapsed')) {
+                toggle.innerHTML = '&#9654;';
+            } else {
+                toggle.innerHTML = '&#9664;';
+            }
+            
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 320);
+        }
 
 </script>
 </body>
