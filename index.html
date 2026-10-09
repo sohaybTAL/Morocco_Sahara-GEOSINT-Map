@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://data-cloud.flightradar24.com">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
-        body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; }
+        body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; } html { overflow-x: hidden; }
         #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; transition: left 0.3s ease; }
         #map.expanded { left: 0; }
         
@@ -119,10 +119,30 @@
         input[type="checkbox"] { margin-right: 10px; accent-color: #0f0; cursor: pointer; }
         .legend-color { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1px solid #555; vertical-align: middle; }
         
-        .base-label { background: transparent; border: none; box-shadow: none; color: #fff; font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
+        .base-label {
+            background: transparent;
+            border: none;
+            box-shadow: none;
+            color: #fff;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            font-weight: bold;
+            text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000;
+            cursor: pointer !important;
+            pointer-events: auto !important;
+            user-select: none;
+            transition: transform 0.15s ease, filter 0.15s ease;
+        }
+        .base-label:hover {
+            filter: brightness(1.4) drop-shadow(0 0 4px currentColor);
+            transform: scale(1.08);
+            text-decoration: underline;
+        }
         .base-label.alg-label { color: #ff5555; }
         .base-label.mor-label { color: #55ff55; }
         .base-label.spa-label { color: #ff55ff; }
+        path:focus, svg:focus, .leaflet-interactive:focus { outline: none !important; }
+        .leaflet-tooltip, .leaflet-popup { transition: none !important; animation: none !important; }
     
         .target-crosshair { animation: spin 4s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -193,6 +213,93 @@
             box-shadow: 0 0 10px #0f0;
         }
 
+        /* HARDWARE DOSSIER PANEL */
+        #dossier-panel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            transform: translateX(120%);
+            width: 350px;
+            max-width: calc(100vw - 40px);
+            background: rgba(10, 15, 10, 0.95);
+            border: 1px solid #0f0;
+            z-index: 1001;
+            padding: 18px;
+            color: #fff;
+            box-shadow: -5px 5px 25px rgba(0, 0, 0, 0.85), 0 0 15px rgba(0, 255, 0, 0.25);
+            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            backdrop-filter: blur(8px);
+            max-height: 85vh;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
+        #dossier-panel.open {
+            transform: translateX(0);
+        }
+        #dossier-close {
+            float: right;
+            color: #ff3333;
+            cursor: pointer;
+            font-weight: bold;
+            border: 1px solid #ff3333;
+            padding: 2px 7px;
+            font-size: 12px;
+            line-height: 1;
+            border-radius: 2px;
+            background: rgba(255, 0, 0, 0.15);
+            transition: 0.2s;
+        }
+        #dossier-close:hover {
+            background: #ff3333;
+            color: #000;
+        }
+        .dossier-img {
+            width: 100%;
+            height: 160px;
+            background: #111;
+            margin: 10px 0;
+            border: 1px solid #0f0;
+            object-fit: cover;
+            border-radius: 2px;
+            display: block;
+        }
+        .dossier-title {
+            font-size: 16px;
+            color: #0f0;
+            border-bottom: 1px solid #333;
+            padding-bottom: 6px;
+            margin-bottom: 10px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            word-break: break-word;
+        }
+        .dossier-stat {
+            font-size: 12px;
+            margin-bottom: 6px;
+            color: #aaa;
+        }
+        .dossier-stat span {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* Tactical Leaflet Popups */
+        .leaflet-popup-content-wrapper {
+            background: rgba(10, 15, 10, 0.95) !important;
+            color: #0f0 !important;
+            border: 1px solid #0f0 !important;
+            border-radius: 4px !important;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.3) !important;
+            font-family: 'Courier New', Courier, monospace !important;
+        }
+        .leaflet-popup-tip {
+            background: #0f1c0f !important;
+            border: 1px solid #0f0 !important;
+        }
+        .leaflet-popup-close-button {
+            color: #0f0 !important;
+        }
+
         /* MOBILE RESPONSIVENESS */
         @media (max-width: 768px) {
             #sidebar {
@@ -212,13 +319,26 @@
             }
             #dossier-panel {
                 width: 90%;
-                display: none;
-                top: 5%;
+                max-width: 380px;
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                right: auto;
+                bottom: auto;
+                transform: translate(-50%, -50%) scale(0.9);
+                opacity: 0;
+                pointer-events: none;
                 padding: 15px;
                 box-sizing: border-box;
+                display: block;
+                transition: transform 0.25s ease, opacity 0.25s ease;
+                z-index: 1002;
             }
             #dossier-panel.open {
-                right: 5%; display: block;
+                transform: translate(-50%, -50%) scale(1);
+                opacity: 1;
+                pointer-events: auto;
+                right: auto;
             }
             #top-status-bar {
                 left: 10px;
@@ -364,6 +484,7 @@
         <div class="control-group">
             <label><input type="checkbox" class="type-filter" value="WALL/TRENCH" checked> Defensive Lines / Berms</label>
             <label><input type="checkbox" class="type-filter" value="AIRBASE" checked> Airbases</label>
+            <label><input type="checkbox" class="type-filter" value="RUNWAY" checked> Runways</label>
             <label><input type="checkbox" class="type-filter" value="SAM" checked> SAM Sites</label>
             <label><input type="checkbox" class="type-filter" value="RADAR" checked> Radars</label>
             <label><input type="checkbox" class="type-filter" value="EWR" checked> Early Warning (EWR)</label>
@@ -427,7 +548,7 @@
             }
             let icon = L.divIcon({
                 className: 'custom-target-anim',
-                html: `<div class="target-ring" style="border-color:${color};"></div><div class="target-center" style="background:${color}; box-shadow:0 0 10px ${color};"></div>`,
+                html: `<div class="target-ring" style="border-color:${color};"></div>`,
                 iconSize: [0, 0]
             });
             activeSelectionMarker = L.marker([lat, lng], {icon: icon, zIndexOffset: 10000}).addTo(map);
@@ -543,32 +664,29 @@
 
         let currentAsset = null;
 
-        function openDossier(name, type, country, latlng) {
-            currentAsset = latlng;
-            if (latlng) setTargetLock(latlng[0], latlng[1], '#0f0');
-            document.getElementById('d_title').innerText = name;
-            document.getElementById('d_type').innerText = type;
-            document.getElementById('d_country').innerText = country;
-            
-            // Set the appropriate category icon for the generic fallback
+        function getAssetDetails(name, type, country) {
             let img = 'icon_installation.svg';
-            if (type === 'SAM') img = 'icon_sam.svg';
+            if (type === 'SAM') img = 'S-300.avif';
             else if (type === 'RADAR') img = 'radar.webp';
-              else if (type === 'EWR' || type === 'EW') img = 'ewr.jpg';
+            else if (type === 'EWR' || type === 'EW') img = 'ewr.jpg';
             else if (type === 'AIRBASE') img = 'airbasee.JPEG';
+            else if (type === 'RUNWAY') img = 'runway.jpeg';
             else if (type === 'DEPOT') img = 'depot.jpg';
-              else if (type === 'RANGE') img = 'range.jpg';
+            else if (type === 'RANGE') img = 'range.jpg';
             else if (type === 'DAM') img = 'icon_dam.svg';
             else if (type === 'WALL/TRENCH') img = 'icon_wall.svg';
-            else if (type === 'AAA') img = 'type_90_pg99_35mm_anti-aircraft_twin-gun_china_chinese_army_defense_industry_military_technology_013.jpg'; // Using your custom AAA silhouette
+            else if (type === 'AAA') img = 'type_90_pg99_35mm_anti-aircraft_twin-gun_china_chinese_army_defense_industry_military_technology_013.jpg';
             
             let intel = 'Asset identified. Awaiting further high-resolution satellite confirmation.';
+            let n = (name || '').toUpperCase();
             
-            let n = name.toUpperCase();
-            
-            // --- STRICT EXACT NAME MATCHING ---
-            // Overrides the generic category icon if you specifically named the hardware
-            if (n.includes('M167 VADS')) {
+            if (n.includes('RUNWAY') || n.includes('RANWAY') || type === 'RUNWAY') {
+                img = 'runway.jpeg';
+                intel = 'Military Runway / Airstrip installation. Operational tactical landing and takeoff surface.';
+            } else if (n.includes('AIRBASE') || type === 'AIRBASE') {
+                img = 'airbasee.JPEG';
+                intel = 'Royal Armed Forces Airbase facility. Operational command and support hangars.';
+            } else if (n.includes('M167 VADS')) {
                 img = 'https://upload.wikimedia.org/wikipedia/commons/8/8d/M167_Vulcan_Air_Defense_System_%28VADS%29.jpg';
                 intel = 'M167 Vulcan Air Defense System (VADS). 20mm rotary cannon for point defense.';
             } else if (n.includes('TYPE90') || n.includes('TYPE 90')) {
@@ -607,13 +725,32 @@
             } else if (n.includes('DWL-002') || n.includes('DWL002')) {
                 img = 'https://upload.wikimedia.org/wikipedia/commons/f/ff/Sri_Lanka_Military_0051.jpg';
                 intel = 'DWL-002 Passive Emitter Tracking Radar System. Detects stealth and stealth-like signatures.';
-            } else if (n === 'BIN EL OUIDANE DAM') {
-                img = 'https://upload.wikimedia.org/wikipedia/commons/1/1d/Barrage_Bin_El_Ouidane.jpg';
-                intel = 'Strategic Water Infrastructure. Critical resource management facility.';
+            } else if (n.includes('BERM') || n.includes('WALL') || type === 'WALL/TRENCH') {
+                img = 'icon_wall.svg';
+                intel = 'Moroccan Western Sahara Berm. ~2,700km defensive fortification equipped with radars, bunkers, and minefields.';
+            } else if (n.includes('DAM') || n.includes('BARRAGE')) {
+                img = 'icon_dam.svg';
+                intel = 'Strategic Water Infrastructure reservoir / dam facility.';
             }
+            return { img, intel };
+        }
+
+        function openDossier(name, type, country, latlng) {
+            currentAsset = latlng;
+            let pingColor = '#0f0';
+            if (country === 'ALGERIA') pingColor = '#ff0000';
+            else if (country === 'MOROCCO') pingColor = '#00ff1f';
+            else if (country === 'SPAIN') pingColor = '#ff00ff';
+            else if (country === 'MAURITANIA') pingColor = '#ffff00';
             
-            document.getElementById('d_img').src = img;
-            document.getElementById('d_intel').innerText = intel;
+            if (latlng) setTargetLock(latlng[0], latlng[1], pingColor);
+            
+            const details = getAssetDetails(name, type, country);
+            document.getElementById('d_title').innerText = name || 'UNNAMED ASSET';
+            document.getElementById('d_type').innerText = type;
+            document.getElementById('d_country').innerText = country;
+            document.getElementById('d_img').src = details.img;
+            document.getElementById('d_intel').innerText = details.intel;
             document.getElementById('dossier-panel').classList.add('open');
         }
 
@@ -662,7 +799,12 @@
         
 
         // -------------------------
-        map.on('click', function(e) { if(activeSelectionMarker) map.removeLayer(activeSelectionMarker); });
+        map.on('click', function(e) { 
+            if(activeSelectionMarker) map.removeLayer(activeSelectionMarker);
+            if (typeof closeDossier === 'function') closeDossier();
+            const briefingModal = document.getElementById('briefing-modal');
+            if (briefingModal) briefingModal.style.display = 'none';
+        });
         map.on('contextmenu', function(e) {
             let lat = e.latlng.lat.toFixed(5);
             let lng = e.latlng.lng.toFixed(5);
@@ -885,12 +1027,14 @@
             if(f.geometry.type === 'LineString') return 'WALL/TRENCH';
             let name = (f.properties.name || "").toUpperCase();
             if(name.includes('AIRBASE')) return 'AIRBASE';
+            if(name.includes('RUNWAY') || name.includes('RANWAY')) return 'RUNWAY';
             if(name.includes('SAM')) return 'SAM';
             if(name.includes('RADAR')) return 'RADAR';
             if(name.includes('EWR')) return 'EWR';
             if(name.includes('AAA')) return 'AAA';
             if(name.includes('DEPOT')) return 'DEPOT';
             if(name.includes('RANGE')) return 'RANGE';
+            if(name.includes('DAM') || name.includes('BARRAGE')) return 'DAM';
             return 'INSTALLATION';
         }
 
@@ -910,6 +1054,7 @@
         function bindData(f, l, color, country) {
             let name = f.properties.name || "";
             let type = getType(f);
+            let displayName = name || (type === 'WALL/TRENCH' ? 'DEFENSIVE BERM / SECTOR' : (country + ' ' + type));
             
             if(f.geometry.type === 'Point') {
                 let labelClass = 'base-label';
@@ -917,11 +1062,39 @@
                 if(country === 'MOROCCO') labelClass += ' mor-label';
                 if(country === 'SPAIN') labelClass += ' spa-label';
                 
-                // Only show permanent label if asset has a real name
+                const coords = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
+
+                // Clicking the dot opens the Dossier window
+                l.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    openDossier(displayName, type, country, coords);
+                });
+
+                // Attach permanent label and make clicking the text open the Dossier window
                 if(name) {
-                    l.bindTooltip(name, {permanent: true, interactive: true, direction: 'right', className: labelClass, offset: [5, 0]});
+                    let tt = l.bindTooltip(name, {
+                        permanent: true,
+                        interactive: true,
+                        direction: 'right',
+                        className: labelClass,
+                        offset: [5, 0]
+                    });
+                    tt.on('click', (e) => {
+                        L.DomEvent.stopPropagation(e);
+                        openDossier(displayName, type, country, coords);
+                    });
                 }
-                l.on('click', () => openDossier(name || 'UNNAMED ASSET', type, country, [f.geometry.coordinates[1], f.geometry.coordinates[0]]));
+
+                l.on('tooltipopen', (e) => {
+                    if (e.tooltip && e.tooltip.getElement()) {
+                        let el = e.tooltip.getElement();
+                        el.style.cursor = 'pointer';
+                        el.onclick = (ev) => {
+                            L.DomEvent.stopPropagation(ev);
+                            openDossier(displayName, type, country, coords);
+                        };
+                    }
+                });
 
                 if (type === 'SAM') {
                     let n = name.toUpperCase();
@@ -940,6 +1113,12 @@
                         }).addTo(samThreatLayer);
                     }
                 }
+            } else {
+                l.on('click', (e) => {
+                    L.DomEvent.stopPropagation(e);
+                    const coords = e.latlng ? [e.latlng.lat, e.latlng.lng] : null;
+                    openDossier(displayName, type, country, coords);
+                });
             }
         }
 
@@ -976,7 +1155,7 @@
                 if(document.getElementById('layer-morocco').checked) {
                     L.geoJSON(filterFeatures(datMor.features), {
                         style: (f) => ({ color: getLineColor(f, '#00ff1f'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#00ff1f'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#00ff1f'), fillOpacity: 0.85 }),
                         onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
                     }).addTo(moroccoLayer);
                 }
@@ -984,7 +1163,7 @@
                 if(document.getElementById('layer-algeria').checked) {
                     L.geoJSON(filterFeatures(datAlg.features), {
                         style: (f) => ({ color: getLineColor(f, '#ff0000'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff0000'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff0000'), fillOpacity: 0.85 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
                     }).addTo(algeriaLayer);
                 }
@@ -992,7 +1171,7 @@
                 if(document.getElementById('layer-spain').checked) {
                     L.geoJSON(filterFeatures(datSpa.features), {
                         style: (f) => ({ color: getLineColor(f, '#ff00ff'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff00ff'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff00ff'), fillOpacity: 0.85 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
                     }).addTo(spainLayer);
                 }
@@ -1000,7 +1179,7 @@
                 if(document.getElementById('layer-mauritania').checked) {
                     L.geoJSON(filterFeatures(datMau.features), {
                         style: (f) => ({ color: getLineColor(f, '#ffff00'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ffff00'), fillOpacity: 0.8 }),
+                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ffff00'), fillOpacity: 0.85 }),
                         onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
                     }).addTo(mauritaniaLayer);
                 }
@@ -1249,6 +1428,11 @@
                     }
                 }
             }
+        });
+
+        // Ensure Leaflet redraws map properly when entering/exiting fullscreen
+        document.addEventListener('fullscreenchange', () => {
+            setTimeout(() => { map.invalidateSize(); }, 300);
         });
 
         // --- MULTILINGUAL SUPPORT (EN/FR) ---
