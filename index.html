@@ -52,6 +52,62 @@
             left: 0;
             border-left: 1px solid #0f0;
         }
+
+        /* Top Status Bar (SYS_ACTIVE on top, FEED badge underneath) */
+        #top-status-bar {
+            position: fixed;
+            top: 15px;
+            left: 400px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 6px;
+            transition: left 0.3s ease;
+            pointer-events: none;
+            user-select: none;
+        }
+        #top-status-bar.expanded {
+            left: 60px;
+        }
+
+        .hud-overlay {
+            color: #0f0;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            text-shadow: 0 0 5px #0f0;
+            white-space: nowrap;
+        }
+        .pulse { animation: pulsate 2s ease-out infinite; }
+        @keyframes pulsate { 0% { opacity: 0.2; } 50% { opacity: 1.0; } 100% { opacity: 0.2; } }
+
+        #sat-badge {
+            background: rgba(15, 28, 15, 0.95);
+            color: #0f0;
+            border: 2px solid #0f0;
+            padding: 8px 18px;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+            font-weight: bold;
+            letter-spacing: 2px;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.4);
+            backdrop-filter: blur(5px);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            white-space: nowrap;
+        }
+        #sat-badge .sat-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            background: #0f0;
+            border-radius: 50%;
+            box-shadow: 0 0 8px #0f0;
+        }
+
         h1 { font-size: 18px; color: #fff; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 0; }
         h2 { font-size: 14px; color: #aaa; margin-top: 20px; text-transform: uppercase; border-bottom: 1px solid #222; padding-bottom: 5px; }
         .stat-box { background: rgba(25, 45, 25, 0.8); padding: 10px; margin-bottom: 10px; border: 1px solid #444; border-left: 4px solid #0f0; }
@@ -62,18 +118,6 @@
         label:hover { color: #fff; }
         input[type="checkbox"] { margin-right: 10px; accent-color: #0f0; cursor: pointer; }
         .legend-color { display: inline-block; width: 12px; height: 12px; margin-right: 8px; border: 1px solid #555; vertical-align: middle; }
-        
-        #dossier-panel { position: absolute; top: 20px; right: -500px; display: none; width: 350px; background: rgba(15, 28, 15, 0.95); border: 1px solid #0f0; z-index: 1001; padding: 20px; color: #fff; box-shadow: -5px 5px 15px rgba(0,0,0,0.8); transition: right 0.3s ease; backdrop-filter: blur(5px); }
-        #dossier-panel.open { right: 20px; display: block; }
-        #dossier-close { float: right; color: #f00; cursor: pointer; font-weight: bold; border: 1px solid #f00; padding: 2px 5px; }
-        .dossier-img { width: 100%; height: 150px; background: #333; margin: 10px 0; border: 1px solid #555; object-fit: cover; }
-        .dossier-title { font-size: 18px; color: #0f0; border-bottom: 1px solid #333; padding-bottom: 5px; margin-bottom: 10px; }
-        .dossier-stat { font-size: 12px; margin-bottom: 5px; color: #aaa; }
-        .dossier-stat span { color: #fff; }
-        
-        .hud-overlay { position: absolute; top: 20px; left: 430px; z-index: 1000; pointer-events: none; opacity: 0.5; }
-        .pulse { animation: pulsate 2s ease-out infinite; }
-        @keyframes pulsate { 0% { opacity: 0.2; } 50% { opacity: 1.0; } 100% { opacity: 0.2; } }
         
         .base-label { background: transparent; border: none; box-shadow: none; color: #fff; font-family: 'Courier New', monospace; font-size: 11px; font-weight: bold; text-shadow: -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000, 1px 1px 0 #000; }
         .base-label.alg-label { color: #ff5555; }
@@ -176,10 +220,19 @@
             #dossier-panel.open {
                 right: 5%; display: block;
             }
-            .hud-overlay {
+            #top-status-bar {
                 left: 10px;
                 top: 10px;
-                font-size: 10px;
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 5px;
+            }
+            .hud-overlay {
+                font-size: 11px;
+            }
+            #sat-badge {
+                font-size: 11px;
+                padding: 4px 10px;
             }
             #briefing-modal {
                 width: 90% !important;
@@ -227,7 +280,9 @@
         <ul style="color: #aaa; font-size: 13px; line-height: 1.8; padding-left: 20px;">
             <li><strong style="color: #0f0;">COMMAND TERMINAL:</strong> Use the sidebar terminal to search for specific bases (e.g., "Tindouf") or paste raw GPS coordinates to drop a targeting crosshair.</li>
             <li><strong style="color: #0f0;">COORDINATE EXTRACTION:</strong> Right-click anywhere on the map to instantly copy exact geographic coordinates to your clipboard.</li>
-              <li><strong style="color: #0f0;">FULLSCREEN MODE:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">F</strong> key on your keyboard at any time to toggle full screen.</li>
+            <li><strong style="color: #0f0;">FULLSCREEN MODE:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">F</strong> key on your keyboard at any time to toggle full screen.</li>
+            <li><strong style="color: #0f0;">TOGGLE SIDEBAR:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">D</strong> key on your keyboard to collapse/expand the sidebar.</li>
+            <li><strong style="color: #0f0;">CYCLE SATELLITE:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">C</strong> key on your keyboard to cycle through satellite feeds.</li>
         </ul>
         <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
     </div>
@@ -259,7 +314,7 @@
                 <option value="esri">ESRI SATELLITE (DEFAULT)</option>
                 <option value="google">GOOGLE SATELLITE</option>
                 <option value="bing">BING SATELLITE</option>
-                <option value="sentinel2">SENTINEL-2 (ESA 2024)</option>
+                <option value="sentinel2">SENTINEL-2 (ESA 2025)</option>
                 <option value="topo">TOPOGRAPHIC MAP</option>
             </select>
         </div>
@@ -353,7 +408,10 @@
     </div>
 
     <div id="map"></div>
-    <div class="hud-overlay pulse" style="color:#0f0; font-size:12px; font-weight:bold; text-shadow: 0 0 5px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
+    <div id="top-status-bar">
+        <div class="hud-overlay pulse" style="color:#0f0; text-shadow: 0 0 8px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
+        <div id="sat-badge"><span class="sat-indicator"></span><span id="sat-badge-text">FEED: ESRI SATELLITE</span></div>
+    </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
@@ -396,7 +454,7 @@
             google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20, noWrap: true }),
             bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19, noWrap: true }),
             topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17, noWrap: true }),
-            sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2024_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2024)', maxZoom: 18, noWrap: true })
+            sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2025)', maxZoom: 18, noWrap: true })
         };
         
         
@@ -454,10 +512,21 @@
         let currentProvider = providers.esri;
         currentProvider.addTo(map);
 
+        function updateSatBadge() {
+            const select = document.getElementById('sat-provider');
+            const badgeText = document.getElementById('sat-badge-text');
+            if (select && badgeText) {
+                const optText = select.options[select.selectedIndex] ? select.options[select.selectedIndex].text : 'SATELLITE';
+                badgeText.innerText = 'FEED: ' + optText;
+            }
+        }
+        updateSatBadge();
+
         document.getElementById('sat-provider').addEventListener('change', function(e) {
             map.removeLayer(currentProvider);
             currentProvider = providers[e.target.value];
             currentProvider.addTo(map);
+            updateSatBadge();
             // Re-add the LOS layer if it has anything on it to ensure it stays on top!
             if (map.hasLayer(losLayer)) {
                 map.removeLayer(losLayer);
@@ -1145,9 +1214,23 @@
             }
         }, 2500);
     
-        // Fullscreen Toggle on F key
+        // Fullscreen Toggle on F key & Sidebar Toggle on D key
         document.addEventListener('keydown', function(e) {
-            if (e.key.toLowerCase() === 'f' && e.target.tagName !== 'INPUT' && e.target.tagName !== 'TEXTAREA') {
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+
+            const key = e.key.toLowerCase();
+            if (key === 'c') {
+                const satSelect = document.getElementById('sat-provider');
+                if (satSelect) {
+                    const nextIndex = (satSelect.selectedIndex + 1) % satSelect.options.length;
+                    satSelect.selectedIndex = nextIndex;
+                    satSelect.dispatchEvent(new Event('change'));
+                }
+            } else if (key === 'd') {
+                if (typeof toggleSidebar === 'function') {
+                    toggleSidebar();
+                }
+            } else if (key === 'f') {
                 if (!document.fullscreenElement) {
                     if (document.documentElement.requestFullscreen) {
                         document.documentElement.requestFullscreen();
@@ -1195,7 +1278,7 @@
             "ESRI SATELLITE (DEFAULT)": "SATELLITE ESRI (DÉFAUT)",
             "GOOGLE SATELLITE": "SATELLITE GOOGLE",
             "BING SATELLITE": "SATELLITE BING",
-            "SENTINEL-2 (ESA 2024)": "SENTINEL-2 (ESA 2024)",
+            "SENTINEL-2 (ESA 2025)": "SENTINEL-2 (ESA 2025)",
             "TOPOGRAPHIC MAP": "CARTE TOPOGRAPHIQUE",
             "Asset Filters": "Filtres d'Actifs",
             "Defensive Lines / Berms": "Lignes Défensives / Murs",
@@ -1304,10 +1387,15 @@
             const sidebar = document.getElementById('sidebar');
             const toggle = document.getElementById('sidebar-toggle');
             const mapEl = document.getElementById('map');
+            const satBadge = document.getElementById('sat-badge');
             
             sidebar.classList.toggle('collapsed');
             toggle.classList.toggle('collapsed');
             mapEl.classList.toggle('expanded');
+            const topBar = document.getElementById('top-status-bar');
+            if (topBar) {
+                topBar.classList.toggle('expanded');
+            }
             
             if (sidebar.classList.contains('collapsed')) {
                 toggle.innerHTML = '&#9654;';
