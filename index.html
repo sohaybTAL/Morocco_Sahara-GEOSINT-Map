@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://data-cloud.flightradar24.com">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <style>
-        body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; } html { overflow-x: hidden; }
+        body { margin: 0; padding: 0; font-family: 'Courier New', Courier, monospace; background: #000; color: #0f0; overflow: hidden; } 
         #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; transition: left 0.3s ease; }
         #map.expanded { left: 0; }
         
@@ -142,7 +142,6 @@
         .base-label.mor-label { color: #55ff55; }
         .base-label.spa-label { color: #ff55ff; }
         path:focus, svg:focus, .leaflet-interactive:focus { outline: none !important; }
-        .leaflet-tooltip, .leaflet-popup { transition: none !important; animation: none !important; }
     
         .target-crosshair { animation: spin 4s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
@@ -217,8 +216,7 @@
         #dossier-panel {
             position: absolute;
             top: 20px;
-            right: 20px;
-            transform: translateX(120%);
+            right: -420px;
             width: 350px;
             max-width: calc(100vw - 40px);
             background: rgba(10, 15, 10, 0.95);
@@ -227,14 +225,14 @@
             padding: 18px;
             color: #fff;
             box-shadow: -5px 5px 25px rgba(0, 0, 0, 0.85), 0 0 15px rgba(0, 255, 0, 0.25);
-            transition: transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
             backdrop-filter: blur(8px);
             max-height: 85vh;
             overflow-y: auto;
             border-radius: 4px;
         }
         #dossier-panel.open {
-            transform: translateX(0);
+            right: 20px;
         }
         #dossier-close {
             float: right;
