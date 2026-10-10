@@ -141,6 +141,7 @@
         .base-label.alg-label { color: #ff5555; }
         .base-label.mor-label { color: #55ff55; }
         .base-label.spa-label { color: #ff55ff; }
+        
         path:focus, svg:focus, .leaflet-interactive:focus { outline: none !important; }
     
         .target-crosshair { animation: spin 4s linear infinite; }
@@ -1106,9 +1107,9 @@
                     
                     if (threatRadius > 0) {
                         let cColor = country === 'ALGERIA' ? '#ff0000' : '#00ff1f';
-                        L.circle([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
+                        l.threatRing = L.circle([f.geometry.coordinates[1], f.geometry.coordinates[0]], {
                             color: cColor, fillColor: cColor, fillOpacity: 0.0, radius: threatRadius, weight: 2
-                        }).addTo(samThreatLayer);
+                        });
                     }
                 }
             } else {
@@ -1120,67 +1121,64 @@
             }
         }
 
+        // Pre-parse the GeoJSON ONCE to completely eliminate Canvas flashing and CPU lag
+        const geoMor = L.geoJSON(datMor.features, {
+            style: (f) => ({ color: getLineColor(f, '#00ff1f'), weight: f.properties.weight || 4, opacity: 0.9 }),
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#00ff1f'), fillOpacity: 0.85 }),
+            onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
+        });
+        const geoAlg = L.geoJSON(datAlg.features, {
+            style: (f) => ({ color: getLineColor(f, '#ff0000'), weight: f.properties.weight || 4, opacity: 0.9 }),
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff0000'), fillOpacity: 0.85 }),
+            onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
+        });
+        const geoSpa = L.geoJSON(datSpa.features, {
+            style: (f) => ({ color: getLineColor(f, '#ff00ff'), weight: f.properties.weight || 4, opacity: 0.9 }),
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff00ff'), fillOpacity: 0.85 }),
+            onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
+        });
+        const geoMau = L.geoJSON(datMau.features, {
+            style: (f) => ({ color: getLineColor(f, '#ffff00'), weight: f.properties.weight || 4, opacity: 0.9 }),
+            pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ffff00'), fillOpacity: 0.85 }),
+            onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
+        });
+
+        // Helper function to efficiently toggle layers without destroying them
+        function updateLayerVisibility(geo, targetGroup, isEnabled, activeTypes) {
+            geo.eachLayer(layer => {
+                let f = layer.feature;
+                // Only skip MASSIVE polygons (hand-drawn SAM rings > 10km wide). Keep tiny base perimeters!
+                if(f.geometry.type === 'Polygon') {
+                    let xs = f.geometry.coordinates[0].map(c => c[0]);
+                    let width = Math.max(...xs) - Math.min(...xs);
+                    if(width > 0.1) {
+                        targetGroup.removeLayer(layer);
+                        return; // Skip hand-drawn 50km circles
+                    }
+                } 
+                
+                let t = getType(f);
+                let shouldShow = isEnabled && (t === 'INSTALLATION' || activeTypes.includes(t));
+                
+                if (shouldShow) {
+                    if (!targetGroup.hasLayer(layer)) targetGroup.addLayer(layer);
+                    if (layer.threatRing && !samThreatLayer.hasLayer(layer.threatRing)) samThreatLayer.addLayer(layer.threatRing);
+                } else {
+                    if (targetGroup.hasLayer(layer)) targetGroup.removeLayer(layer);
+                    if (layer.threatRing && samThreatLayer.hasLayer(layer.threatRing)) samThreatLayer.removeLayer(layer.threatRing);
+                }
+            });
+        }
+
         function renderMap() {
             try {
-                moroccoLayer.clearLayers();
-                algeriaLayer.clearLayers();
-                spainLayer.clearLayers();
-                mauritaniaLayer.clearLayers();
-                samThreatLayer.clearLayers();
-                losLayer.clearLayers();
-                
                 let activeTypes = Array.from(document.querySelectorAll('.type-filter:checked')).map(cb => cb.value);
-                if(activeTypes.includes('DEPOT')) activeTypes.push('RANGE');
+                if(activeTypes.includes('DEPOT')) activeTypes.push('RANGE'); // Keep the original logic
                 
-                function filterFeatures(features) {
-                    let out = [];
-                    features.forEach(f => {
-                        // Only skip MASSIVE polygons (hand-drawn SAM rings > 10km wide). Keep tiny base perimeters!
-                        if(f.geometry.type === 'Polygon') {
-                            let xs = f.geometry.coordinates[0].map(c => c[0]);
-                            let width = Math.max(...xs) - Math.min(...xs);
-                            if(width > 0.1) return; // Skip hand-drawn 50km circles
-                        } 
-                        
-                        let t = getType(f);
-                        if(t === 'INSTALLATION' || activeTypes.includes(t)) {
-                            out.push(f);
-                        }
-                    });
-                    return out;
-                }
-
-                if(document.getElementById('layer-morocco').checked) {
-                    L.geoJSON(filterFeatures(datMor.features), {
-                        style: (f) => ({ color: getLineColor(f, '#00ff1f'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#00ff1f'), fillOpacity: 0.85 }),
-                        onEachFeature: (f, l) => bindData(f, l, '#00ff1f', 'MOROCCO')
-                    }).addTo(moroccoLayer);
-                }
-                
-                if(document.getElementById('layer-algeria').checked) {
-                    L.geoJSON(filterFeatures(datAlg.features), {
-                        style: (f) => ({ color: getLineColor(f, '#ff0000'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff0000'), fillOpacity: 0.85 }),
-                        onEachFeature: (f, l) => bindData(f, l, '#ff0000', 'ALGERIA')
-                    }).addTo(algeriaLayer);
-                }
-                
-                if(document.getElementById('layer-spain').checked) {
-                    L.geoJSON(filterFeatures(datSpa.features), {
-                        style: (f) => ({ color: getLineColor(f, '#ff00ff'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ff00ff'), fillOpacity: 0.85 }),
-                        onEachFeature: (f, l) => bindData(f, l, '#ff00ff', 'SPAIN')
-                    }).addTo(spainLayer);
-                }
-                
-                if(document.getElementById('layer-mauritania').checked) {
-                    L.geoJSON(filterFeatures(datMau.features), {
-                        style: (f) => ({ color: getLineColor(f, '#ffff00'), weight: f.properties.weight || 4, opacity: 0.9 }),
-                        pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 7, stroke: false, fillColor: getPointColor(f, '#ffff00'), fillOpacity: 0.85 }),
-                        onEachFeature: (f, l) => bindData(f, l, '#ffff00', 'MAURITANIA')
-                    }).addTo(mauritaniaLayer);
-                }
+                updateLayerVisibility(geoMor, moroccoLayer, document.getElementById('layer-morocco').checked, activeTypes);
+                updateLayerVisibility(geoAlg, algeriaLayer, document.getElementById('layer-algeria').checked, activeTypes);
+                updateLayerVisibility(geoSpa, spainLayer, document.getElementById('layer-spain').checked, activeTypes);
+                updateLayerVisibility(geoMau, mauritaniaLayer, document.getElementById('layer-mauritania').checked, activeTypes);
                 
                 if(!document.getElementById('layer-sam-threat').checked) {
                     map.removeLayer(samThreatLayer);
@@ -1216,10 +1214,14 @@
         const flightLayer = L.layerGroup();
         let flightInterval = null;
 
-        function fetchFlights() {
-            // Get current map view boundaries dynamically for "worldwide" support
-            let b = map.getBounds();
-            // Add a huge padding so other planes don't disappear when you zoom in on one
+        let isFetchingFlights = false;
+        async function fetchFlights() {
+            if (isFetchingFlights) return;
+            isFetchingFlights = true;
+            try {
+                // Get current map view boundaries dynamically for "worldwide" support
+                let b = map.getBounds();
+                // Add a huge padding so other planes don't disappear when you zoom in on one
             let n = b.getNorth() + 15, s = b.getSouth() - 15, w = b.getWest() - 20, e = b.getEast() + 20;
             // Clamp coordinates to valid Earth bounds
             if(n > 90) n = 90; if(s < -90) s = -90;
@@ -1347,7 +1349,12 @@
             
             setTimeout(() => { 
                 if (document.body.contains(script)) document.body.removeChild(script); 
+                isFetchingFlights = false;
             }, 3000);
+            } catch (err) {
+                isFetchingFlights = false;
+                console.error("Flight fetch error:", err);
+            }
         }
 
         document.getElementById('layer-flights').addEventListener('change', function(e) {

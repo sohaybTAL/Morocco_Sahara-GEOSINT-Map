@@ -134,7 +134,7 @@ export default function middleware(req) {
       RESTRICTED AREA // 401
     </div>
     <h1>Accès Refusé - Zone Sécurisée GEOINT</h1>
-    <p>Authentification requise pour accéder au système cartographique et aux flux satellitaires.</p>
+    <p>Authentification requise pour accéder au système cartographique et aux flux satellitaires.<br><br>Si vous souhaitez obtenir un accès, veuillez contacter le créateur.</p>
     <a href="javascript:location.reload()" class="btn">S'authentifier</a>
     <div class="sub">SYS_ID: GEOINT-FAR // STATUS: LOCKED</div>
   </div>
