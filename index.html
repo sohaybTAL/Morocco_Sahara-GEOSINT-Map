@@ -439,7 +439,6 @@
                 <option value="esri">ESRI SATELLITE (DEFAULT)</option>
                 <option value="google">GOOGLE SATELLITE</option>
                 <option value="apple">APPLE SATELLITE</option>
-                <option value="here">HERE SATELLITE</option>
                 <option value="bing">BING SATELLITE</option>
                 <option value="sentinel2">SENTINEL-2 (ESA 2025)</option>
             </select>
@@ -549,15 +548,19 @@
 
         let activeSelectionMarker = null;
         function setTargetLock(lat, lng, color = '#0f0') {
+            const numLat = Number(lat);
+            const numLng = Number(lng);
+            if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) return;
+            const safeColor = /^#[0-9a-fA-F]{3,6}$/.test(color) ? color : '#0f0';
             if (activeSelectionMarker) {
                 map.removeLayer(activeSelectionMarker);
             }
             let icon = L.divIcon({
                 className: 'custom-target-anim',
-                html: `<div class="target-ring" style="border-color:${color};"></div>`,
+                html: `<div class="target-ring" style="border-color:${safeColor};"></div>`,
                 iconSize: [0, 0]
             });
-            activeSelectionMarker = L.marker([lat, lng], {icon: icon, zIndexOffset: 10000}).addTo(map);
+            activeSelectionMarker = L.marker([numLat, numLng], {icon: icon, zIndexOffset: 10000}).addTo(map);
         }
         L.control.zoom({ position: 'topleft' }).addTo(map);
 
@@ -580,41 +583,55 @@
         function getAppleTileUrl(key) {
             return 'https://sat-cdn.apple-mapkit.com/tile?style=7&size=1&scale=1&z={z}&x={x}&y={y}&v=10471&accessKey=' + encodeURIComponent(decodeURIComponent(key));
         }
-        let appleAccessKey = '1791840601_5096779819515865486_/_Vk6mPDyFBv8m18CuSJGpJmYADcwUUdEH7/xmX3quDtA=';
+        let appleAccessKey = '1791845174_7851962173383090543_/_0SM0ts40eJaclCW92AqdeqDaVQFjHbOOBqvYGmBzycI=';
+        let lastAppleKeyRefresh = 0;
+        let isRefreshingAppleKey = false;
         const appleLayer = L.tileLayer(getAppleTileUrl(appleAccessKey), {
             attribution: '© Apple Maps',
             maxZoom: 19,
             noWrap: true
         });
 
-        // Dynamic Apple Key Refresh from backend (if hosted or on Vercel)
-        if (window.location.protocol !== 'file:') {
-            fetch('/apple-key')
-                .then(r => r.json())
-                .then(d => {
-                    if (d && d.accessKey) {
-                        appleAccessKey = d.accessKey;
-                        appleLayer.setUrl(getAppleTileUrl(appleAccessKey));
+        async function refreshAppleKey(force = false) {
+            const now = Date.now();
+            if (isRefreshingAppleKey || (!force && now - lastAppleKeyRefresh < 60000)) return;
+            isRefreshingAppleKey = true;
+            try {
+                let newKey = null;
+                if (window.location.protocol !== 'file:') {
+                    const r = await fetch('/apple-key', { credentials: 'same-origin', cache: 'no-store' });
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d && d.accessKey) newKey = d.accessKey;
                     }
-                })
-                .catch(() => {});
+                } else {
+                    const r = await fetch('https://moroccogeosint.vercel.app/apple-key', { cache: 'no-store' });
+                    if (r.ok) {
+                        const d = await r.json();
+                        if (d && d.accessKey) newKey = d.accessKey;
+                    }
+                }
+                if (newKey) {
+                    appleAccessKey = newKey;
+                    lastAppleKeyRefresh = Date.now();
+                    appleLayer.setUrl(getAppleTileUrl(appleAccessKey));
+                }
+            } catch (err) {
+                // Ignore transient network errors
+            } finally {
+                isRefreshingAppleKey = false;
+            }
         }
 
-        // HERE Satellite Layer
-        const hereTileUrl = (window.location.protocol === 'file:')
-            ? 'https://moroccogeosint.vercel.app/here-tile/{z}/{x}/{y}.jpg'
-            : '/here-tile/{z}/{x}/{y}.jpg';
-        const hereLayer = L.tileLayer(hereTileUrl, {
-            attribution: '© HERE Technologies',
-            maxZoom: 20,
-            noWrap: true
-        });
+        // Initial key fetch + auto-refresh every 15 minutes + auto-recover on tile error
+        refreshAppleKey(true);
+        setInterval(() => refreshAppleKey(true), 15 * 60 * 1000);
+        appleLayer.on('tileerror', () => refreshAppleKey(false));
 
         const providers = {
             esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri', maxZoom: 18, noWrap: true }),
             google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20, noWrap: true }),
             apple: appleLayer,
-            here: hereLayer,
             bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19, noWrap: true }),
             sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2025)', maxZoom: 18, noWrap: true })
         };
@@ -629,8 +646,10 @@
                 fetch('https://api.rainviewer.com/public/weather-maps.json')
                 .then(response => response.json())
                 .then(data => {
-                    let past = data.radar.past;
-                    let lastPath = past[past.length - 1].path;
+                    let past = (data && data.radar && Array.isArray(data.radar.past)) ? data.radar.past : [];
+                    if (!past.length) return;
+                    let lastPath = String(past[past.length - 1].path || '');
+                    if (!/^\/v2\/radar\/[0-9a-zA-Z/_-]+$/.test(lastPath)) return;
                     weatherLayer = L.tileLayer('https://tilecache.rainviewer.com' + lastPath + '/256/{z}/{x}/{y}/2/1_1.png', {
                         opacity: 0.6,
                         zIndex: 450,
@@ -685,6 +704,9 @@
         updateSatBadge();
 
         document.getElementById('sat-provider').addEventListener('change', function(e) {
+            if (e.target.value === 'apple' && Date.now() - lastAppleKeyRefresh > 10 * 60 * 1000) {
+                refreshAppleKey(true);
+            }
             map.removeLayer(currentProvider);
             currentProvider = providers[e.target.value];
             currentProvider.addTo(map);
@@ -893,15 +915,27 @@
         }
 
         
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         function handleTerminalSuggest(e) {
             const val = e.target.value.trim().toUpperCase();
             const box = document.getElementById('cmd-suggestions');
+            if (!box) return;
             if (val.length < 2) {
-                if(box) box.style.display = 'none';
+                box.style.display = 'none';
+                box.textContent = '';
                 return;
             }
             
-            let html = '';
+            box.textContent = '';
+            const frag = document.createDocumentFragment();
             let count = 0;
             
             if (typeof flightLayer !== 'undefined' && map.hasLayer(flightLayer)) {
@@ -909,15 +943,16 @@
                     if (layer.flightData && count < 15) {
                         const f = layer.flightData;
                         if (f.callsign.includes(val) || f.type.includes(val) || f.reg.includes(val)) {
-                            let lat = layer.getLatLng().lat;
-                            let lng = layer.getLatLng().lng;
-                            let tag = f.isRMAF ? '[RMAF]' : (f.isMil ? '[MIL]' : '[CIV]');
-                            let color = f.isRMAF ? '#00ff1f' : (f.isMil ? '#ff4400' : '#ffff00');
-                            let layerId = layer._leaflet_id;
-                            html += `<div style="padding: 5px; border-bottom: 1px dashed #333; cursor: pointer; color: ${color};" 
-                                    onclick="clickSuggestion(${lat}, ${lng}, ${layerId})">
-                                    &#9992; ${tag} ${f.callsign} (${f.type})
-                                    </div>`;
+                            const lat = layer.getLatLng().lat;
+                            const lng = layer.getLatLng().lng;
+                            const tag = f.isRMAF ? '[RMAF]' : (f.isMil ? '[MIL]' : '[CIV]');
+                            const color = f.isRMAF ? '#00ff1f' : (f.isMil ? '#ff4400' : '#ffff00');
+                            const layerId = layer._leaflet_id;
+                            const item = document.createElement('div');
+                            item.style.cssText = `padding: 5px; border-bottom: 1px dashed #333; cursor: pointer; color: ${color};`;
+                            item.textContent = `\u2708 ${tag} ${f.callsign} (${f.type})`;
+                            item.addEventListener('click', () => clickSuggestion(lat, lng, layerId));
+                            frag.appendChild(item);
                             count++;
                         }
                     }
@@ -932,22 +967,23 @@
                 if (count >= 25) break;
                 if (f.properties && f.properties.name && f.properties.name.toUpperCase().includes(val)) {
                     if (f.geometry.type === 'Point') {
-                        let lat = f.geometry.coordinates[1];
-                        let lng = f.geometry.coordinates[0];
-                        let safeName = f.properties.name.replace(/'/g, "\\'");
-                        html += `<div style="padding: 5px; border-bottom: 1px dashed #333; cursor: pointer; color: #0f0;" 
-                                onclick="clickAssetSuggestion(${lat}, ${lng}, '${safeName}')">
-                                &#9672; [ASSET] ${f.properties.name}
-                                </div>`;
+                        const lat = f.geometry.coordinates[1];
+                        const lng = f.geometry.coordinates[0];
+                        const assetName = f.properties.name;
+                        const item = document.createElement('div');
+                        item.style.cssText = 'padding: 5px; border-bottom: 1px dashed #333; cursor: pointer; color: #0f0;';
+                        item.textContent = `\u25C8 [ASSET] ${assetName}`;
+                        item.addEventListener('click', () => clickAssetSuggestion(lat, lng, assetName));
+                        frag.appendChild(item);
                         count++;
                     }
                 }
             }
             
-            if (html && box) {
-                box.innerHTML = html;
+            if (count > 0) {
+                box.appendChild(frag);
                 box.style.display = 'block';
-            } else if (box) {
+            } else {
                 box.style.display = 'none';
             }
         }
@@ -980,7 +1016,10 @@
         });
 
         function executeCoordinateDrop(lat, lng) {
-            map.flyTo([lat, lng], 12, { animate: true, duration: 2 });
+            const numLat = Number(lat);
+            const numLng = Number(lng);
+            if (!Number.isFinite(numLat) || !Number.isFinite(numLng) || numLat < -90 || numLat > 90 || numLng < -180 || numLng > 180) return;
+            map.flyTo([numLat, numLng], 12, { animate: true, duration: 2 });
             
             if (targetCrosshair) map.removeLayer(targetCrosshair);
             
@@ -991,7 +1030,7 @@
                 iconSize: [40, 40],
                 iconAnchor: [20, 20]
             });
-            targetCrosshair = L.marker([lat, lng], {icon: icon}).addTo(map);
+            targetCrosshair = L.marker([numLat, numLng], {icon: icon}).addTo(map);
             
             // Remove it after 10 seconds
             setTimeout(() => {
@@ -1113,7 +1152,7 @@
 
                 // Attach permanent label and make clicking the text open the Dossier window
                 if(name) {
-                    let tt = l.bindTooltip(name, {
+                    let tt = l.bindTooltip(escapeHtml(name), {
                         permanent: true,
                         interactive: true,
                         direction: 'right',
@@ -1281,22 +1320,24 @@
                 
                 for (let key in data) {
                     if (key === 'full_count' || key === 'version') continue;
-                    count++;
                     const a = data[key];
-                    const lat = a[1];
-                    const lon = a[2];
-                    const hdg = a[3];
-                    const alt = Math.round(a[4]);
-                    const spd = Math.round(a[5]);
-                    const squawk = a[6] || 'N/A';
-                    const type = a[8] || 'UNKNOWN';
-                    const reg = a[9] || 'N/A';
-                    const orig = a[11] || 'N/A';
-                    const dest = a[12] || 'N/A';
-                    const flightNo = a[13] || 'N/A';
+                    if (!Array.isArray(a)) continue;
+                    const numLat = Number(a[1]);
+                    const numLon = Number(a[2]);
+                    if (!Number.isFinite(numLat) || !Number.isFinite(numLon) || numLat < -90 || numLat > 90 || numLon < -180 || numLon > 180) continue;
+                    count++;
+                    const numHdg = Number.isFinite(Number(a[3])) ? Number(a[3]) : 0;
+                    const alt = Number.isFinite(Number(a[4])) ? Math.round(Number(a[4])) : 0;
+                    const spd = Number.isFinite(Number(a[5])) ? Math.round(Number(a[5])) : 0;
+                    const squawk = String(a[6] || 'N/A');
+                    const type = String(a[8] || 'UNKNOWN');
+                    const reg = String(a[9] || 'N/A');
+                    const orig = String(a[11] || 'N/A');
+                    const dest = String(a[12] || 'N/A');
+                    const flightNo = String(a[13] || 'N/A');
                     const onGround = a[14] ? 'YES' : 'NO';
-                    const vspd = a[15] || 0;
-                    const callsign = (a[16] || a[13] || a[9] || 'UNKNOWN').trim();
+                    const numVspd = Number.isFinite(Number(a[15])) ? Math.round(Number(a[15])) : 0;
+                    const callsign = String(a[16] || a[13] || a[9] || 'UNKNOWN').trim();
                     
                     const isRMAF = (callsign.startsWith('RMAF') || reg.startsWith('CNA') || callsign.startsWith('MAF'));
                     const isMil = (callsign.startsWith('RCH') || callsign.startsWith('FORTE') || callsign.startsWith('JAKE') || squawk === '7700' || squawk === '7600' || type.startsWith('C130') || type.startsWith('C30J') || type.startsWith('A400'));
@@ -1321,7 +1362,7 @@
                     // 1. If military/RMAF, OR if zoomed in closer, draw the full rotated DOM triangle
                     // 2. If standard commercial plane AND zoomed out, draw a blazing fast Canvas circle
                     if (useSimpleDots && !isImportant) {
-                        marker = L.circleMarker([lat, lon], {
+                        marker = L.circleMarker([numLat, numLon], {
                             radius: 2,
                             color: color,
                             fillColor: color,
@@ -1332,11 +1373,11 @@
                     } else {
                         const icon = L.divIcon({
                             className: '',
-                            html: `<div style="transform:rotate(${hdg}deg); color:${color}; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>`,
+                            html: `<div style="transform:rotate(${numHdg}deg); color:${color}; font-size:14px; text-shadow:0 0 4px #000; line-height:1;">&#9650;</div>`,
                             iconSize: [14, 14],
                             iconAnchor: [7, 7]
                         });
-                        marker = L.marker([lat, lon], {icon: icon});
+                        marker = L.marker([numLat, numLon], {icon: icon});
                     }
 
                     let safeType = type ? type.toString().toUpperCase() : 'UNKNOWN';
@@ -1347,35 +1388,35 @@
                     // Only bind hover tooltips to important planes OR when zoomed in to save memory
                     if (!useSimpleDots || isImportant) {
                         let tooltipClass = isRMAF ? 'base-label mor-label' : 'base-label';
-                        marker.bindTooltip(displayCallsign, {permanent: false, direction: 'right', className: tooltipClass, offset: [8, 0]});
+                        marker.bindTooltip(escapeHtml(displayCallsign), {permanent: false, direction: 'right', className: tooltipClass, offset: [8, 0]});
                     }
                     
-                    let fr24Link = `https://www.flightradar24.com/${callsign}/${key}`;
-                    let vspdStr = vspd > 0 ? `+${vspd} fpm` : `${vspd} fpm`;
+                    let fr24Link = `https://www.flightradar24.com/${encodeURIComponent(callsign)}/${encodeURIComponent(key)}`;
+                    let vspdStr = numVspd > 0 ? `+${numVspd} fpm` : `${numVspd} fpm`;
                     
                     let popupHtml = `<div style="font-family:Courier New; background:#000; color:#0f0; padding:8px; border:1px solid #0f0; font-size:12px; width: 220px; line-height: 1.4;">` +
-                        `<strong style="color:${color}; font-size: 14px;">[${displayCallsign}]</strong><br>` +
+                        `<strong style="color:${color}; font-size: 14px;">[${escapeHtml(displayCallsign)}]</strong><br>` +
                         tagHtml +
                         `<div style="border-bottom:1px dashed #333; margin:4px 0;"></div>` +
-                        `<b>ROUTE:</b> ${orig} &rarr; ${dest}<br>` +
-                        `<b>FLIGHT:</b> ${flightNo}<br>` +
-                        `<b>AIRCRAFT:</b> ${type} (${reg})<br>` +
+                        `<b>ROUTE:</b> ${escapeHtml(orig)} &rarr; ${escapeHtml(dest)}<br>` +
+                        `<b>FLIGHT:</b> ${escapeHtml(flightNo)}<br>` +
+                        `<b>AIRCRAFT:</b> ${escapeHtml(type)} (${escapeHtml(reg)})<br>` +
                         `<div style="border-bottom:1px dashed #333; margin:4px 0;"></div>` +
-                        `<b>ALT:</b> ${alt} ft (${onGround === 'YES' ? 'GROUND' : 'AIR'})<br>` +
-                        `<b>SPD:</b> ${spd} kts<br>` +
-                        `<b>HDG:</b> ${Math.round(hdg)}&deg;<br>` +
-                        `<b>V.SPD:</b> ${vspdStr}<br>` +
-                        `<b>SQUAWK:</b> ${squawk}<br>` +
+                        `<b>ALT:</b> ${escapeHtml(alt)} ft (${onGround === 'YES' ? 'GROUND' : 'AIR'})<br>` +
+                        `<b>SPD:</b> ${escapeHtml(spd)} kts<br>` +
+                        `<b>HDG:</b> ${Math.round(numHdg)}&deg;<br>` +
+                        `<b>V.SPD:</b> ${escapeHtml(vspdStr)}<br>` +
+                        `<b>SQUAWK:</b> ${escapeHtml(squawk)}<br>` +
                         `<div style="border-bottom:1px dashed #333; margin:4px 0;"></div>` +
                         `<div style="text-align:center; margin-bottom: 2px;">` +
-                        `<a href="${fr24Link}" target="_blank" style="color:#0ff; text-decoration:none; font-weight:bold; border:1px solid #0ff; padding:2px 5px; display:inline-block; margin-top:2px;">[ VIEW ON FLIGHTRADAR24 ]</a>` +
+                        `<a href="${escapeHtml(fr24Link)}" target="_blank" rel="noopener noreferrer" style="color:#0ff; text-decoration:none; font-weight:bold; border:1px solid #0ff; padding:2px 5px; display:inline-block; margin-top:2px;">[ VIEW ON FLIGHTRADAR24 ]</a>` +
                         `</div>` +
-                        `<span style="color:#aaa; font-size:10px;">GPS: ${lat.toFixed(4)}, ${lon.toFixed(4)}</span>` +
+                        `<span style="color:#aaa; font-size:10px;">GPS: ${numLat.toFixed(4)}, ${numLon.toFixed(4)}</span>` +
                         `</div>`;
                     
                     marker.bindPopup(popupHtml);
                     marker.on('popupopen', function() {
-                        setTargetLock(lat, lon, '#0ff');
+                        setTargetLock(numLat, numLon, '#0ff');
                     });
                     
                     marker.addTo(flightLayer);
@@ -1509,7 +1550,6 @@
             "ESRI SATELLITE (DEFAULT)": "SATELLITE ESRI (DÉFAUT)",
             "GOOGLE SATELLITE": "SATELLITE GOOGLE",
             "APPLE SATELLITE": "SATELLITE APPLE",
-            "HERE SATELLITE": "SATELLITE HERE",
             "BING SATELLITE": "SATELLITE BING",
             "SENTINEL-2 (ESA 2025)": "SENTINEL-2 (ESA 2025)",
             "Asset Filters": "Filtres d'Actifs",
@@ -1605,9 +1645,13 @@
                 }
             } else if (currentTool === 'THREAT') {
                 let rad = prompt("Enter threat radius in KM (e.g., 150 for Patriot, 400 for S-400):", "150");
-                if (rad && !isNaN(rad)) {
-                    L.circle(e.latlng, {radius: rad * 1000, color: '#ff0000', fillColor: '#ff0000', fillOpacity: 0.1, weight: 2, dashArray: '10, 10'})
-                     .bindPopup('<b style="color:red">CUSTOM THREAT RING ('+rad+' KM)</b>')
+                let numRad = rad !== null && rad.trim() !== '' ? Number(rad) : NaN;
+                if (Number.isFinite(numRad) && numRad > 0) {
+                    const popupEl = document.createElement('b');
+                    popupEl.style.color = 'red';
+                    popupEl.textContent = `CUSTOM THREAT RING (${numRad} KM)`;
+                    L.circle(e.latlng, {radius: numRad * 1000, color: '#ff0000', fillColor: '#ff0000', fillOpacity: 0.1, weight: 2, dashArray: '10, 10'})
+                     .bindPopup(popupEl)
                      .addTo(measureLayer);
                 }
                 toggleTool('THREAT', activeToolBtn);
@@ -1630,9 +1674,9 @@
             }
             
             if (sidebar.classList.contains('collapsed')) {
-                toggle.innerHTML = '&#9654;';
+                toggle.textContent = '\u25B6';
             } else {
-                toggle.innerHTML = '&#9664;';
+                toggle.textContent = '\u25C0';
             }
             
             setTimeout(() => {

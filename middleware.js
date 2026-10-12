@@ -4,81 +4,37 @@ export const config = {
   matcher: '/(.*)',
 };
 
+async function safeEqual(a, b) {
+  const enc = new TextEncoder();
+  const [hashA, hashB] = await Promise.all([
+    crypto.subtle.digest('SHA-256', enc.encode(String(a))),
+    crypto.subtle.digest('SHA-256', enc.encode(String(b)))
+  ]);
+  const viewA = new Uint8Array(hashA);
+  const viewB = new Uint8Array(hashB);
+  let diff = 0;
+  for (let i = 0; i < viewA.length; i++) {
+    diff |= viewA[i] ^ viewB[i];
+  }
+  return diff === 0;
+}
+
 export default async function middleware(req) {
-  const url = new URL(req.url);
-
-  // 1. Dynamic Apple MapKit Satellite token endpoint
-  if (url.pathname === '/apple-key') {
-    try {
-      const ddgRes = await fetch('https://duckduckgo.com/local.js?get_mk_token=1', {
-        headers: { 'User-Agent': 'Mozilla/5.0' }
-      });
-      const jwt = (await ddgRes.text()).trim();
-      const bootRes = await fetch('https://cdn.apple-mapkit.com/ma/bootstrap?apiVersion=2&mkjsVersion=5.79.95&poi=1', {
-        headers: {
-          'User-Agent': 'Mozilla/5.0',
-          'Authorization': `Bearer ${jwt}`,
-          'Origin': 'https://duckduckgo.com',
-          'Referer': 'https://duckduckgo.com/'
-        }
-      });
-      const boot = await bootRes.json();
-      const sat = (boot.tileSources || []).find(t => t.tileSource === 'satellite');
-      const accessKey = boot.accessKey || (sat && sat.path && sat.path.split('accessKey=')[1]);
-      return new Response(JSON.stringify({ accessKey }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*',
-          'Cache-Control': 'public, max-age=3600'
-        }
-      });
-    } catch (e) {
-      return new Response(JSON.stringify({ error: e.message }), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
-      });
-    }
-  }
-
-  // 2. HERE Satellite tile proxy (injects required wego.here.com Referer header)
-  if (url.pathname.startsWith('/here-tile/')) {
-    const parts = url.pathname.replace('/here-tile/', '').replace(/\.jpe?g|\.png/, '').split('/');
-    if (parts.length >= 3) {
-      const [z, x, y] = parts;
-      try {
-        const hereUrl = `https://maps.hereapi.com/v3/base/mc/${z}/${x}/${y}/jpeg?style=satellite.day&apiKey=aZWQ05uSeD_ewwa8pMDqNOfQtAY_vUAjlgiRflJ4_ug`;
-        const tileRes = await fetch(hereUrl, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0',
-            'Referer': 'https://wego.here.com/'
-          }
-        });
-        const tileData = await tileRes.arrayBuffer();
-        return new Response(tileData, {
-          status: tileRes.status,
-          headers: {
-            'Content-Type': 'image/jpeg',
-            'Access-Control-Allow-Origin': '*',
-            'Cache-Control': 'public, max-age=86400'
-          }
-        });
-      } catch (e) {
-        return new Response('Tile fetch error', { status: 502 });
-      }
-    }
-  }
-
   const basicAuth = req.headers.get('authorization');
+  let isAuthenticated = false;
 
   if (basicAuth) {
     try {
-      const authValue = basicAuth.split(' ')[1];
-      if (!authValue) throw new Error('Missing auth value');
+      const match = basicAuth.trim().match(/^Basic\s+(.+)$/i);
+      if (!match || !match[1]) throw new Error('Missing auth value');
 
-      // Decode the base64 string
-      const decoded = atob(authValue);
-      const [user, pwd] = decoded.split(':');
+      // Decode the base64 string and split ONLY on the first colon (RFC 7617)
+      const decoded = atob(match[1]);
+      const colonIdx = decoded.indexOf(':');
+      if (colonIdx === -1) throw new Error('Malformed credentials');
+
+      const user = decoded.slice(0, colonIdx);
+      const pwd = decoded.slice(colonIdx + 1);
 
       const validUser = process.env.ADMIN_USERNAME;
       const validPwd = process.env.ADMIN_PASSWORD;
@@ -88,15 +44,67 @@ export default async function middleware(req) {
         throw new Error('Server configuration missing');
       }
 
-      // Check credentials
-      if (user === validUser && pwd === validPwd) {
-        // Officially supported Vercel API for continuing the request to static files
-        return next();
+      const [userOk, pwdOk] = await Promise.all([
+        safeEqual(user, validUser),
+        safeEqual(pwd, validPwd)
+      ]);
+
+      if (userOk && pwdOk) {
+        isAuthenticated = true;
       }
     } catch (e) {
       // Catch malformed base64, missing headers, or missing env vars.
       // Silently fall through to the 401 response below instead of throwing 500.
+      isAuthenticated = false;
     }
+  }
+
+  if (isAuthenticated) {
+    const url = new URL(req.url);
+
+    // 1. Dynamic Apple MapKit Satellite token endpoint (authenticated)
+    if (url.pathname === '/apple-key') {
+      try {
+        const ddgRes = await fetch('https://duckduckgo.com/local.js?get_mk_token=1', {
+          cache: 'no-store',
+          headers: { 'User-Agent': 'Mozilla/5.0' }
+        });
+        const jwt = (await ddgRes.text()).trim();
+        const bootRes = await fetch('https://cdn.apple-mapkit.com/ma/bootstrap?apiVersion=2&mkjsVersion=5.79.95&poi=1', {
+          cache: 'no-store',
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Authorization': `Bearer ${jwt}`,
+            'Origin': 'https://duckduckgo.com',
+            'Referer': 'https://duckduckgo.com/'
+          }
+        });
+        const boot = await bootRes.json();
+        const sat = (boot.tileSources || []).find(t => t.tileSource === 'satellite');
+        const accessKey = boot.accessKey || (sat && sat.path && sat.path.split('accessKey=')[1]);
+        if (!accessKey) {
+          return new Response(JSON.stringify({ error: 'Token unavailable' }), {
+            status: 502,
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+          });
+        }
+        return new Response(JSON.stringify({ accessKey }), {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Cache-Control': 'private, max-age=900'
+          }
+        });
+      } catch (e) {
+        return new Response(JSON.stringify({ error: 'Token service unavailable' }), {
+          status: 502,
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        });
+      }
+    }
+
+    // Officially supported Vercel API for continuing the request to static files
+    return next();
   }
 
   const html = `<!DOCTYPE html>
