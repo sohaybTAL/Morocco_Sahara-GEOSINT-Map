@@ -226,14 +226,20 @@
             padding: 18px;
             color: #fff;
             box-shadow: -5px 5px 25px rgba(0, 0, 0, 0.85), 0 0 15px rgba(0, 255, 0, 0.25);
-            transition: right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+            transition: right 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.25s ease, visibility 0.25s;
             backdrop-filter: blur(8px);
             max-height: 85vh;
             overflow-y: auto;
             border-radius: 4px;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
         }
         #dossier-panel.open {
             right: 20px;
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
         }
         #dossier-close {
             float: right;
@@ -403,7 +409,7 @@
             <li><strong style="color: #0f0;">TOGGLE SIDEBAR:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">D</strong> key on your keyboard to collapse/expand the sidebar.</li>
             <li><strong style="color: #0f0;">CYCLE SATELLITE:</strong> Press the <strong style="color: #fff; background: #333; padding: 0 4px; border-radius: 3px; border: 1px solid #555;">C</strong> key on your keyboard to cycle through satellite feeds.</li>
         </ul>
-        <button onclick="document.getElementById('briefing-modal').style.display='none'" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
+        <button onclick="document.getElementById('briefing-modal').style.display='none'; if(typeof closeDossier === 'function') closeDossier();" style="width: 100%; padding: 12px; background: #0f0; color: #000; font-weight: bold; border: none; cursor: pointer; margin-top: 20px; font-family: 'Courier New'; font-size: 14px; transition: 0.2s;">[ ACKNOWLEDGE & INITIALIZE ]</button>
     </div>
 
     <!-- Sidebar Toggle Button -->
@@ -436,7 +442,6 @@
                 <option value="here">HERE SATELLITE</option>
                 <option value="bing">BING SATELLITE</option>
                 <option value="sentinel2">SENTINEL-2 (ESA 2025)</option>
-                <option value="topo">TOPOGRAPHIC MAP</option>
             </select>
         </div>
         
@@ -611,7 +616,6 @@
             apple: appleLayer,
             here: hereLayer,
             bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19, noWrap: true }),
-            topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17, noWrap: true }),
             sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2025)', maxZoom: 18, noWrap: true })
         };
         
@@ -1508,7 +1512,6 @@
             "HERE SATELLITE": "SATELLITE HERE",
             "BING SATELLITE": "SATELLITE BING",
             "SENTINEL-2 (ESA 2025)": "SENTINEL-2 (ESA 2025)",
-            "TOPOGRAPHIC MAP": "CARTE TOPOGRAPHIQUE",
             "Asset Filters": "Filtres d'Actifs",
             "Defensive Lines / Berms": "Lignes Défensives / Murs",
             "Airbases": "Bases Aériennes",
