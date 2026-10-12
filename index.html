@@ -572,8 +572,11 @@
         });
 
         // Apple MapKit Satellite Layer
-        let appleAccessKey = '1791839700_8371142985299508975_%2F_bIE56vmqTfuqhDj%2BaXMv4JFbRVaI9bRHni0eEdrvx2I%3D';
-        const appleLayer = L.tileLayer('https://sat-cdn.apple-mapkit.com/tile?style=7&size=1&scale=1&z={z}&x={x}&y={y}&v=10471&accessKey=' + appleAccessKey, {
+        function getAppleTileUrl(key) {
+            return 'https://sat-cdn.apple-mapkit.com/tile?style=7&size=1&scale=1&z={z}&x={x}&y={y}&v=10471&accessKey=' + encodeURIComponent(decodeURIComponent(key));
+        }
+        let appleAccessKey = '1791840601_5096779819515865486_/_Vk6mPDyFBv8m18CuSJGpJmYADcwUUdEH7/xmX3quDtA=';
+        const appleLayer = L.tileLayer(getAppleTileUrl(appleAccessKey), {
             attribution: '© Apple Maps',
             maxZoom: 19,
             noWrap: true
@@ -586,7 +589,7 @@
                 .then(d => {
                     if (d && d.accessKey) {
                         appleAccessKey = d.accessKey;
-                        appleLayer.setUrl('https://sat-cdn.apple-mapkit.com/tile?style=7&size=1&scale=1&z={z}&x={x}&y={y}&v=10471&accessKey=' + appleAccessKey);
+                        appleLayer.setUrl(getAppleTileUrl(appleAccessKey));
                     }
                 })
                 .catch(() => {});
