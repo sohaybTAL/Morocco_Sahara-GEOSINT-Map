@@ -4,7 +4,71 @@ export const config = {
   matcher: '/(.*)',
 };
 
-export default function middleware(req) {
+export default async function middleware(req) {
+  const url = new URL(req.url);
+
+  // 1. Dynamic Apple MapKit Satellite token endpoint
+  if (url.pathname === '/apple-key') {
+    try {
+      const ddgRes = await fetch('https://duckduckgo.com/local.js?get_mk_token=1', {
+        headers: { 'User-Agent': 'Mozilla/5.0' }
+      });
+      const jwt = (await ddgRes.text()).trim();
+      const bootRes = await fetch('https://cdn.apple-mapkit.com/ma/bootstrap?apiVersion=2&mkjsVersion=5.79.95&poi=1', {
+        headers: {
+          'User-Agent': 'Mozilla/5.0',
+          'Authorization': `Bearer ${jwt}`,
+          'Origin': 'https://duckduckgo.com',
+          'Referer': 'https://duckduckgo.com/'
+        }
+      });
+      const boot = await bootRes.json();
+      const sat = (boot.tileSources || []).find(t => t.tileSource === 'satellite');
+      const accessKey = boot.accessKey || (sat && sat.path && sat.path.split('accessKey=')[1]);
+      return new Response(JSON.stringify({ accessKey }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'public, max-age=3600'
+        }
+      });
+    } catch (e) {
+      return new Response(JSON.stringify({ error: e.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
+    }
+  }
+
+  // 2. HERE Satellite tile proxy (injects required wego.here.com Referer header)
+  if (url.pathname.startsWith('/here-tile/')) {
+    const parts = url.pathname.replace('/here-tile/', '').replace(/\.jpe?g|\.png/, '').split('/');
+    if (parts.length >= 3) {
+      const [z, x, y] = parts;
+      try {
+        const hereUrl = `https://maps.hereapi.com/v3/base/mc/${z}/${x}/${y}/jpeg?style=satellite.day&apiKey=aZWQ05uSeD_ewwa8pMDqNOfQtAY_vUAjlgiRflJ4_ug`;
+        const tileRes = await fetch(hereUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0',
+            'Referer': 'https://wego.here.com/'
+          }
+        });
+        const tileData = await tileRes.arrayBuffer();
+        return new Response(tileData, {
+          status: tileRes.status,
+          headers: {
+            'Content-Type': 'image/jpeg',
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'public, max-age=86400'
+          }
+        });
+      } catch (e) {
+        return new Response('Tile fetch error', { status: 502 });
+      }
+    }
+  }
+
   const basicAuth = req.headers.get('authorization');
 
   if (basicAuth) {

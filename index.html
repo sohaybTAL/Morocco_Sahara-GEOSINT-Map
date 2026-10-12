@@ -432,6 +432,8 @@
             <select id="sat-provider" style="width: 100%; background: #111; color: #0f0; border: 1px solid #333; padding: 5px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer; outline: none;">
                 <option value="esri">ESRI SATELLITE (DEFAULT)</option>
                 <option value="google">GOOGLE SATELLITE</option>
+                <option value="apple">APPLE SATELLITE</option>
+                <option value="here">HERE SATELLITE</option>
                 <option value="bing">BING SATELLITE</option>
                 <option value="sentinel2">SENTINEL-2 (ESA 2025)</option>
                 <option value="topo">TOPOGRAPHIC MAP</option>
@@ -569,9 +571,42 @@
             }
         });
 
+        // Apple MapKit Satellite Layer
+        let appleAccessKey = '1791839700_8371142985299508975_%2F_bIE56vmqTfuqhDj%2BaXMv4JFbRVaI9bRHni0eEdrvx2I%3D';
+        const appleLayer = L.tileLayer('https://sat-cdn.apple-mapkit.com/tile?style=7&size=1&scale=1&z={z}&x={x}&y={y}&v=10471&accessKey=' + appleAccessKey, {
+            attribution: '© Apple Maps',
+            maxZoom: 19,
+            noWrap: true
+        });
+
+        // Dynamic Apple Key Refresh from backend (if hosted or on Vercel)
+        if (window.location.protocol !== 'file:') {
+            fetch('/apple-key')
+                .then(r => r.json())
+                .then(d => {
+                    if (d && d.accessKey) {
+                        appleAccessKey = d.accessKey;
+                        appleLayer.setUrl('https://sat-cdn.apple-mapkit.com/tile?style=7&size=1&scale=1&z={z}&x={x}&y={y}&v=10471&accessKey=' + appleAccessKey);
+                    }
+                })
+                .catch(() => {});
+        }
+
+        // HERE Satellite Layer
+        const hereTileUrl = (window.location.protocol === 'file:')
+            ? 'https://moroccogeosint.vercel.app/here-tile/{z}/{x}/{y}.jpg'
+            : '/here-tile/{z}/{x}/{y}.jpg';
+        const hereLayer = L.tileLayer(hereTileUrl, {
+            attribution: '© HERE Technologies',
+            maxZoom: 20,
+            noWrap: true
+        });
+
         const providers = {
             esri: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { attribution: 'Esri', maxZoom: 18, noWrap: true }),
             google: L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { attribution: 'Google', maxZoom: 20, noWrap: true }),
+            apple: appleLayer,
+            here: hereLayer,
             bing: new L.TileLayer.Bing('https://ecn.t3.tiles.virtualearth.net/tiles/a{q}.jpeg?g=1', { attribution: 'Bing', maxZoom: 19, noWrap: true }),
             topo: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', { attribution: 'OpenTopoMap', maxZoom: 17, noWrap: true }),
             sentinel2: L.tileLayer('https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2025_3857/default/GoogleMapsCompatible/{z}/{y}/{x}.jpg', { attribution: '© EOX IT Services GmbH (Sentinel-2 cloudless 2025)', maxZoom: 18, noWrap: true })
@@ -1466,6 +1501,8 @@
             "[FR24] Live ADS-B Flights": "[FR24] Vols ADS-B en direct",
             "ESRI SATELLITE (DEFAULT)": "SATELLITE ESRI (DÉFAUT)",
             "GOOGLE SATELLITE": "SATELLITE GOOGLE",
+            "APPLE SATELLITE": "SATELLITE APPLE",
+            "HERE SATELLITE": "SATELLITE HERE",
             "BING SATELLITE": "SATELLITE BING",
             "SENTINEL-2 (ESA 2025)": "SENTINEL-2 (ESA 2025)",
             "TOPOGRAPHIC MAP": "CARTE TOPOGRAPHIQUE",
