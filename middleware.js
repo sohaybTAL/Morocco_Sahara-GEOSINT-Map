@@ -760,6 +760,29 @@ function renderAdminDashboard(adminUser, usersMap) {
   const webhooks = getWebhookConfig();
   const discordConfigured = Boolean(webhooks.discord);
   const telegramConfigured = Boolean(webhooks.teleToken && webhooks.teleChat);
+  const totalSessions = ACCESS_LOGS.length;
+
+  let initialLogsHtml = '';
+  if (ACCESS_LOGS.length === 0) {
+    initialLogsHtml = '<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 25px;">&#128225; Aucun journal de session pour le moment.<br><span style="font-size:11px;color:#475569;">Les connexions apparaîtront ici dès qu&#39;un opérateur visite la carte.</span></td></tr>';
+  } else {
+    initialLogsHtml = ACCESS_LOGS.map(l => {
+      const d = new Date(l.timestamp);
+      const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
+      const flag = l.country && l.country !== 'XX' ? ' [' + l.country + ']' : '';
+      const isAdmin = Boolean(l.isAdmin || l.user === 'admin' || l.user === 'elmakhchounix' || l.user === 'sohayb');
+      const roleSub = isAdmin ? '👑 NIVEAU 1 // ROOT' : '🛡️ NIVEAU 2 // OPÉRATEUR';
+      const userTag = (isAdmin ? '&#128081; ' : '&#128737;&#65039; ') + l.user;
+      return '<tr>' +
+        '<td><strong>' + dateStr + '</strong><br><span style="font-size:10px;color:#64748b;">' + l.timestamp + '</span></td>' +
+        '<td><span class="badge-user ' + (isAdmin ? 'badge-admin' : '') + '">' + userTag + '</span><br><span style="font-size:10px;font-weight:bold;color:' + (isAdmin ? '#fca5a5' : '#86efac') + ';">' + roleSub + '</span></td>' +
+        '<td><code style="color:#38bdf8;">' + l.ip + '</code></td>' +
+        '<td>' + (l.city !== 'Unknown' ? l.city + ', ' : '') + l.country + flag + '</td>' +
+        '<td style="font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;">' + (l.userAgent || 'N/A') + '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
   const serverLogsJson = JSON.stringify(ACCESS_LOGS);
 
   return `<!DOCTYPE html>
@@ -917,7 +940,7 @@ function renderAdminDashboard(adminUser, usersMap) {
       </div>
       <div class="stat-card blue">
         <div class="stat-label">Sessions Enregistrées</div>
-        <div class="stat-val" id="total-sessions-count">0 SESSIONS</div>
+        <div class="stat-val" id="total-sessions-count">${totalSessions} SESSIONS</div>
       </div>
       <div class="stat-card red">
         <div class="stat-label">Alerte Discord</div>
@@ -1012,7 +1035,7 @@ function renderAdminDashboard(adminUser, usersMap) {
             </tr>
           </thead>
           <tbody id="logs-tbody">
-            <tr><td colspan="5" style="text-align: center; color: #64748b; padding: 25px;">Chargement des données d'audit...</td></tr>
+            ${initialLogsHtml}
           </tbody>
         </table>
       </div>
@@ -1021,7 +1044,7 @@ function renderAdminDashboard(adminUser, usersMap) {
     <!-- INSTANT WEBHOOK CONFIGURATION GUIDE -->
     <div class="section">
       <div class="section-header">
-        <h2>⚡ CONFIGURATION DES ALERTES (DISCORD & TELEGRAM)</h2>
+        <h2>⚡ CONFIGURATION DES ALERTES (DISCORD &amp; TELEGRAM)</h2>
       </div>
       <div class="guide-box">
         Vous pouvez configurer les alertes de <strong>deux façons simples</strong> :<br><br>
@@ -1037,68 +1060,110 @@ function renderAdminDashboard(adminUser, usersMap) {
   <script>
     var localLogHistory = [];
 
-    // 1. Load persistent logs from localStorage
+    // 1. Safely load persistent logs from localStorage with array/object validation
     try {
       var saved = localStorage.getItem("geoint_audit_history");
-      if (saved) localLogHistory = JSON.parse(saved);
-    } catch(e) {}
+      if (saved) {
+        var parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localLogHistory = parsed.filter(function(x) { return x && typeof x === "object" && x.user; });
+        }
+      }
+    } catch(e) {
+      console.warn("Storage notice:", e);
+      localLogHistory = [];
+    }
 
-    // 2. Load server-rendered logs directly
-    var serverLogs = ${serverLogsJson} || [];
-    var mergeMap = new Map();
-    serverLogs.forEach(function(item) { mergeMap.set(item.id || (item.timestamp + item.user), item); });
-    localLogHistory.forEach(function(item) { mergeMap.set(item.id || (item.timestamp + item.user), item); });
-    localLogHistory = Array.from(mergeMap.values()).sort(function(a,b) { return new Date(b.timestamp) - new Date(a.timestamp); });
-    try { localStorage.setItem("geoint_audit_history", JSON.stringify(localLogHistory)); } catch(e){}
+    // 2. Safely merge server-rendered logs
+    try {
+      var serverLogs = ${JSON.stringify(ACCESS_LOGS)} || [];
+      if (Array.isArray(serverLogs)) {
+        var mergeMap = new Map();
+        serverLogs.forEach(function(item) {
+          if (item && typeof item === "object") {
+            var key = item.id || (String(item.timestamp) + "_" + String(item.user));
+            mergeMap.set(key, item);
+          }
+        });
+        localLogHistory.forEach(function(item) {
+          if (item && typeof item === "object") {
+            var key = item.id || (String(item.timestamp) + "_" + String(item.user));
+            mergeMap.set(key, item);
+          }
+        });
+        localLogHistory = Array.from(mergeMap.values()).sort(function(a, b) {
+          return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+        localStorage.setItem("geoint_audit_history", JSON.stringify(localLogHistory));
+      }
+    } catch(e) {
+      console.warn("Merge notice:", e);
+    }
 
     function renderTable(logs) {
-      var tbody = document.getElementById("logs-tbody");
-      var counter = document.getElementById("total-sessions-count");
+      try {
+        var tbody = document.getElementById("logs-tbody");
+        var counter = document.getElementById("total-sessions-count");
 
-      if (!logs || logs.length === 0) {
-        if (tbody) {
-          tbody.innerHTML = "<tr><td colspan=\"5\" style=\"text-align: center; color: #64748b; padding: 25px;\">&#128225; Aucun journal de session pour le moment.<br><span style=\"font-size:11px;color:#475569;\">Les connexions apparaitront ici des qu&#39;un operateur visite la carte.</span></td></tr>";
+        if (!logs || !Array.isArray(logs) || logs.length === 0) {
+          if (counter) counter.textContent = "0 SESSIONS";
+          return;
         }
-        if (counter) counter.textContent = "0 SESSIONS";
-        return;
-      }
 
-      if (counter) counter.textContent = logs.length + " SESSIONS";
+        if (counter) counter.textContent = logs.length + " SESSIONS";
 
-      if (tbody) {
-        tbody.innerHTML = logs.map(function(l) {
-          var d = new Date(l.timestamp);
-          var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-          var flag = l.country && l.country !== "XX" ? " [" + l.country + "]" : "";
-          var isAdmin = Boolean(l.isAdmin || l.user === "admin" || l.user === "elmakhchounix" || l.user === "sohayb");
-          var roleSub = isAdmin ? "👑 NIVEAU 1 // ROOT" : "🛡️ NIVEAU 2 // OPÉRATEUR";
-          return "<tr>" +
-            "<td><strong>" + dateStr + "</strong><br><span style=\"font-size:10px;color:#64748b;\">" + l.timestamp + "</span></td>" +
-            "<td><span class=\"badge-user " + (isAdmin ? "badge-admin" : "") + "\">" + (isAdmin ? "&#128081; " : "&#128737;&#65039; ") + l.user + "</span><br><span style=\"font-size:10px;font-weight:bold;color:" + (isAdmin ? "#fca5a5" : "#86efac") + ";\">" + roleSub + "</span></td>" +
-            "<td><code style=\"color:#38bdf8;\">" + l.ip + "</code></td>" +
-            "<td>" + (l.city !== "Unknown" ? l.city + ", " : "") + l.country + flag + "</td>" +
-            "<td style=\"font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;\">" + (l.userAgent || "N/A") + "</td>" +
-          "</tr>";
-        }).join("");
+        if (tbody) {
+          tbody.innerHTML = logs.map(function(l) {
+            if (!l) return "";
+            var d = new Date(l.timestamp || Date.now());
+            var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+            var flag = l.country && l.country !== "XX" ? " [" + l.country + "]" : "";
+            var isAdmin = Boolean(l.isAdmin || l.user === "admin" || l.user === "elmakhchounix" || l.user === "sohayb");
+            var roleSub = isAdmin ? "👑 NIVEAU 1 // ROOT" : "🛡️ NIVEAU 2 // OPÉRATEUR";
+            return "<tr>" +
+              "<td><strong>" + dateStr + "</strong><br><span style=\"font-size:10px;color:#64748b;\">" + (l.timestamp || "") + "</span></td>" +
+              "<td><span class=\"badge-user " + (isAdmin ? "badge-admin" : "") + "\">" + (isAdmin ? "&#128081; " : "&#128737;&#65039; ") + (l.user || "ANONYME") + "</span><br><span style=\"font-size:10px;font-weight:bold;color:" + (isAdmin ? "#fca5a5" : "#86efac") + ";\">" + roleSub + "</span></td>" +
+              "<td><code style=\"color:#38bdf8;\">" + (l.ip || "Direct") + "</code></td>" +
+              "<td>" + (l.city && l.city !== "Unknown" ? l.city + ", " : "") + (l.country || "XX") + flag + "</td>" +
+              "<td style=\"font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;\">" + (l.userAgent || "N/A") + "</td>" +
+            "</tr>";
+          }).join("");
+        }
+      } catch(renderErr) {
+        console.error("Render error:", renderErr);
       }
     }
 
-    // Immediately render current logs
-    renderTable(localLogHistory);
+    // Immediately render current logs if present
+    if (localLogHistory && localLogHistory.length > 0) {
+      renderTable(localLogHistory);
+    }
 
     async function fetchLatestLogs() {
       try {
         var res = await fetch("/api/admin/logs", { credentials: "include" });
         if (!res.ok) return;
         var data = await res.json();
-        if (!data || !data.logs) return;
+        if (!data || !Array.isArray(data.logs)) return;
         
         var map = new Map();
-        data.logs.forEach(function(item) { map.set(item.id || (item.timestamp + item.user), item); });
-        localLogHistory.forEach(function(item) { map.set(item.id || (item.timestamp + item.user), item); });
+        data.logs.forEach(function(item) {
+          if (item && typeof item === "object") {
+            var key = item.id || (String(item.timestamp) + "_" + String(item.user));
+            map.set(key, item);
+          }
+        });
+        localLogHistory.forEach(function(item) {
+          if (item && typeof item === "object") {
+            var key = item.id || (String(item.timestamp) + "_" + String(item.user));
+            map.set(key, item);
+          }
+        });
         
-        localLogHistory = Array.from(map.values()).sort(function(a,b) { return new Date(b.timestamp) - new Date(a.timestamp); });
-        try { localStorage.setItem("geoint_audit_history", JSON.stringify(localLogHistory)); } catch(e){}
+        localLogHistory = Array.from(map.values()).sort(function(a,b) {
+          return new Date(b.timestamp) - new Date(a.timestamp);
+        });
+        localStorage.setItem("geoint_audit_history", JSON.stringify(localLogHistory));
         
         renderTable(localLogHistory);
       } catch(err) {
@@ -1107,9 +1172,10 @@ function renderAdminDashboard(adminUser, usersMap) {
     }
 
     function filterLogs() {
-      var q = (document.getElementById("log-search").value || "").toLowerCase();
+      var q = (document.getElementById("log-search").value || "").toLowerCase().trim();
       if (!q) { renderTable(localLogHistory); return; }
       var filtered = localLogHistory.filter(function(l) { 
+        if (!l) return false;
         return (l.user && l.user.toLowerCase().includes(q)) ||
           (l.ip && l.ip.toLowerCase().includes(q)) ||
           (l.country && l.country.toLowerCase().includes(q)) ||
@@ -1141,8 +1207,11 @@ function renderAdminDashboard(adminUser, usersMap) {
       }
     }
 
-    // Background sync every 10 seconds
-    setInterval(fetchLatestLogs, 10000);
+    // Call immediately on page load
+    fetchLatestLogs();
+
+    // Background sync every 8 seconds
+    setInterval(fetchLatestLogs, 8000);
   </script>
 </body>
 </html>`;
