@@ -334,9 +334,17 @@ export default async function middleware(req) {
           headers: { 'Content-Type': 'text/html; charset=utf-8' }
         });
       }
+      if (ACCESS_LOGS.length === 0) {
+        recordAndAlert(authenticatedUser, req);
+      }
+      const adminHeaders = new Headers({
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-store'
+      });
+      adminHeaders.append('Set-Cookie', `geoint_operator=${encodeURIComponent(authenticatedUser)}; Path=/; SameSite=Lax; Max-Age=86400`);
       return new Response(renderAdminDashboard(authenticatedUser, usersMap), {
         status: 200,
-        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        headers: adminHeaders
       });
     }
 
@@ -788,47 +796,51 @@ function renderAdminDashboard(adminUser, usersMap) {
   </div>
 
   <script>
-    let localLogHistory = [];
+    var localLogHistory = [];
 
     // 1. Load persistent logs from localStorage
     try {
-      const saved = localStorage.getItem('geoint_audit_history');
+      var saved = localStorage.getItem("geoint_audit_history");
       if (saved) localLogHistory = JSON.parse(saved);
     } catch(e) {}
 
     // 2. Load server-rendered logs directly
-    const serverLogs = ${serverLogsJson} || [];
-    const mergeMap = new Map();
-    serverLogs.forEach(item => mergeMap.set(item.id || (item.timestamp + item.user), item));
-    localLogHistory.forEach(item => mergeMap.set(item.id || (item.timestamp + item.user), item));
-    localLogHistory = Array.from(mergeMap.values()).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-    try { localStorage.setItem('geoint_audit_history', JSON.stringify(localLogHistory)); } catch(e){}
+    var serverLogs = ${serverLogsJson} || [];
+    var mergeMap = new Map();
+    serverLogs.forEach(function(item) { mergeMap.set(item.id || (item.timestamp + item.user), item); });
+    localLogHistory.forEach(function(item) { mergeMap.set(item.id || (item.timestamp + item.user), item); });
+    localLogHistory = Array.from(mergeMap.values()).sort(function(a,b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+    try { localStorage.setItem("geoint_audit_history", JSON.stringify(localLogHistory)); } catch(e){}
 
     function renderTable(logs) {
-      const tbody = document.getElementById('logs-tbody');
-      const counter = document.getElementById('total-sessions-count');
+      var tbody = document.getElementById("logs-tbody");
+      var counter = document.getElementById("total-sessions-count");
 
       if (!logs || logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 25px;">📡 Aucun journal de session pour le moment.<br><span style="font-size:11px;color:#475569;">Les connexions apparaîtront ici dès qu\'un opérateur visite la carte.</span></td></tr>';
-        if (counter) counter.textContent = '0 SESSIONS';
+        if (tbody) {
+          tbody.innerHTML = "<tr><td colspan=\"5\" style=\"text-align: center; color: #64748b; padding: 25px;\">&#128225; Aucun journal de session pour le moment.<br><span style=\"font-size:11px;color:#475569;\">Les connexions apparaitront ici des qu&#39;un operateur visite la carte.</span></td></tr>";
+        }
+        if (counter) counter.textContent = "0 SESSIONS";
         return;
       }
 
-      if (counter) counter.textContent = logs.length + ' SESSIONS';
+      if (counter) counter.textContent = logs.length + " SESSIONS";
 
-      tbody.innerHTML = logs.map(l => {
-        const d = new Date(l.timestamp);
-        const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
-        const flag = l.country && l.country !== 'XX' ? ' [' + l.country + ']' : '';
-        const isAdmin = l.user === 'admin' || l.user === 'elmakhchounix';
-        return '<tr>' +
-          '<td><strong>' + dateStr + '</strong><br><span style="font-size:10px;color:#64748b;">' + l.timestamp + '</span></td>' +
-          '<td><span class="badge-user ' + (isAdmin ? 'badge-admin' : '') + '">' + (isAdmin ? '👑 ' : '👤 ') + l.user + '</span></td>' +
-          '<td><code style="color:#38bdf8;">' + l.ip + '</code></td>' +
-          '<td>' + (l.city !== 'Unknown' ? l.city + ', ' : '') + l.country + flag + '</td>' +
-          '<td style="font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;">' + (l.userAgent || 'N/A') + '</td>' +
-        '</tr>';
-      }).join('');
+      if (tbody) {
+        tbody.innerHTML = logs.map(function(l) {
+          var d = new Date(l.timestamp);
+          var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
+          var flag = l.country && l.country !== "XX" ? " [" + l.country + "]" : "";
+          var isAdmin = l.user === "admin" || l.user === "elmakhchounix";
+          return "<tr>" +
+            "<td><strong>" + dateStr + "</strong><br><span style=\"font-size:10px;color:#64748b;\">" + l.timestamp + "</span></td>" +
+            "<td><span class=\"badge-user " + (isAdmin ? "badge-admin" : "") + "\">" + (isAdmin ? "&#128081; " : "&#128100; ") + l.user + "</span></td>" +
+            "<td><code style=\"color:#38bdf8;\">" + l.ip + "</code></td>" +
+            "<td>" + (l.city !== "Unknown" ? l.city + ", " : "") + l.country + flag + "</td>" +
+            "<td style=\"font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;\">" + (l.userAgent || "N/A") + "</td>" +
+          "</tr>";
+        }).join("");
+      }
     }
 
     // Immediately render current logs
@@ -836,41 +848,41 @@ function renderAdminDashboard(adminUser, usersMap) {
 
     async function fetchLatestLogs() {
       try {
-        const res = await fetch('/api/admin/logs', { credentials: 'include' });
+        var res = await fetch("/api/admin/logs", { credentials: "include" });
         if (!res.ok) return;
-        const data = await res.json();
+        var data = await res.json();
         if (!data || !data.logs) return;
         
-        const map = new Map();
-        data.logs.forEach(item => map.set(item.id || (item.timestamp + item.user), item));
-        localLogHistory.forEach(item => map.set(item.id || (item.timestamp + item.user), item));
+        var map = new Map();
+        data.logs.forEach(function(item) { map.set(item.id || (item.timestamp + item.user), item); });
+        localLogHistory.forEach(function(item) { map.set(item.id || (item.timestamp + item.user), item); });
         
-        localLogHistory = Array.from(map.values()).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
-        try { localStorage.setItem('geoint_audit_history', JSON.stringify(localLogHistory)); } catch(e){}
+        localLogHistory = Array.from(map.values()).sort(function(a,b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+        try { localStorage.setItem("geoint_audit_history", JSON.stringify(localLogHistory)); } catch(e){}
         
         renderTable(localLogHistory);
       } catch(err) {
-        console.warn('Sync notice:', err);
+        console.warn("Sync notice:", err);
       }
     }
 
     function filterLogs() {
-      const q = document.getElementById('log-search').value.toLowerCase();
+      var q = (document.getElementById("log-search").value || "").toLowerCase();
       if (!q) { renderTable(localLogHistory); return; }
-      const filtered = localLogHistory.filter(l => 
-        (l.user && l.user.toLowerCase().includes(q)) ||
-        (l.ip && l.ip.toLowerCase().includes(q)) ||
-        (l.country && l.country.toLowerCase().includes(q)) ||
-        (l.city && l.city.toLowerCase().includes(q))
-      );
+      var filtered = localLogHistory.filter(function(l) { 
+        return (l.user && l.user.toLowerCase().includes(q)) ||
+          (l.ip && l.ip.toLowerCase().includes(q)) ||
+          (l.country && l.country.toLowerCase().includes(q)) ||
+          (l.city && l.city.toLowerCase().includes(q));
+      });
       renderTable(filtered);
     }
 
     function exportLogsJson() {
-      const text = JSON.stringify(localLogHistory, null, 2);
-      navigator.clipboard.writeText(text).then(() => {
-        alert("Journal d'audit copié dans le presse-papier !");
-      }).catch(() => {
+      var text = JSON.stringify(localLogHistory, null, 2);
+      navigator.clipboard.writeText(text).then(function() {
+        alert("Journal d'audit copie dans le presse-papier !");
+      }).catch(function() {
         prompt("Copiez les logs ci-dessous :", text);
       });
     }
