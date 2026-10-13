@@ -438,6 +438,24 @@
             </div>
             <span style="font-size: 12px;">MOROCCO SAHARA GEOINT</span>
         </div>
+
+        <!-- ACTIVE OPERATOR IDENTIFIER BADGE -->
+        <div id="operator-badge-box" style="margin-bottom: 20px; background: rgba(0, 25, 0, 0.6); border: 1px solid #1a551a; border-radius: 4px; padding: 10px 12px; font-family: 'Courier New', monospace; font-size: 11px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                <span style="color: #64748b; font-size: 10px; letter-spacing: 1.5px;">ACTIVE OPERATOR</span>
+                <span id="operator-clearance" style="background: rgba(0, 255, 0, 0.15); color: #0f0; border: 1px solid #0f0; padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold; letter-spacing: 1px;">VERIFIED</span>
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div style="color: #0f0; font-weight: bold; font-size: 13px; letter-spacing: 1px; display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 7px; height: 7px; background: #0f0; border-radius: 50%; box-shadow: 0 0 6px #0f0;"></span>
+                    <span id="operator-callsign">AUTH_VERIFIED</span>
+                </div>
+                <span id="operator-loc" style="color: #64748b; font-size: 10px;"></span>
+            </div>
+            <a href="/admin" id="admin-panel-link" style="display: none; margin-top: 10px; text-align: center; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 5px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.35)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">
+                [ 🛡️ ACCÈS REGISTRE AUDIT (/admin) ]
+            </a>
+        </div>
         
                 <h2>Satellite Feed</h2>
         <div class="control-group" style="padding-bottom: 15px;">
@@ -543,6 +561,11 @@
     <div id="top-status-bar">
         <div class="hud-overlay pulse" style="color:#0f0; text-shadow: 0 0 8px #0f0;">SYS_ACTIVE // SAT_LINK_SECURE</div>
         <div id="sat-badge"><span class="sat-indicator"></span><span id="sat-badge-text">FEED: ESRI SATELLITE</span></div>
+    </div>
+
+    <!-- SECURITY WATERMARK -->
+    <div id="operator-watermark" style="position: fixed; bottom: 8px; right: 90px; z-index: 999; pointer-events: none; font-family: 'Courier New', monospace; font-size: 10px; color: rgba(0, 255, 0, 0.45); letter-spacing: 1px; text-transform: uppercase; background: rgba(0,0,0,0.55); padding: 3px 8px; border-radius: 3px; border: 1px solid rgba(0, 255, 0, 0.25);">
+        OPERATOR: <span id="watermark-callsign" style="font-weight: bold; color: rgba(0, 255, 0, 0.8);">VERIFIED</span> // GEOINT-FAR
     </div>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -1565,7 +1588,9 @@
             "Radars": "Radars",
             "Early Warning (EWR)": "Alerte Précoce (EWR)",
             "Anti-Air (AAA)": "Anti-Aérien (AAA)",
-            "SYS_ACTIVE // SAT_LINK_SECURE": "SYSTÈME_ACTIF // LIAISON_SAT_SÉCURISÉE"
+            "SYS_ACTIVE // SAT_LINK_SECURE": "SYSTÈME_ACTIF // LIAISON_SAT_SÉCURISÉE",
+            "ACTIVE OPERATOR": "OPÉRATEUR ACTIF",
+            "VERIFIED": "VÉRIFIÉ"
         };
 
         let currentLang = 'en';
@@ -1689,6 +1714,34 @@
                 map.invalidateSize();
             }, 320);
         }
+
+        // --- OPERATOR IDENTITY INITIALIZATION ---
+        fetch('/api/whoami')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.user) {
+                    const callsign = data.user.toUpperCase();
+                    const callsignEl = document.getElementById('operator-callsign');
+                    if (callsignEl) callsignEl.textContent = callsign;
+                    const wmEl = document.getElementById('watermark-callsign');
+                    if (wmEl) wmEl.textContent = callsign;
+                    const locEl = document.getElementById('operator-loc');
+                    if (locEl && data.country && data.country !== 'XX') locEl.textContent = '[' + data.country + ']';
+
+                    if (data.isAdmin) {
+                        const adminLink = document.getElementById('admin-panel-link');
+                        if (adminLink) adminLink.style.display = 'block';
+                        const clrEl = document.getElementById('operator-clearance');
+                        if (clrEl) {
+                            clrEl.textContent = 'ROOT_ADMIN';
+                            clrEl.style.color = '#ef4444';
+                            clrEl.style.borderColor = '#ef4444';
+                            clrEl.style.background = 'rgba(239, 68, 68, 0.2)';
+                        }
+                    }
+                }
+            })
+            .catch(() => {});
 
 </script>
 </body>
