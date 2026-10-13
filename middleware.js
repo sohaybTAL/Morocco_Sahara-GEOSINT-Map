@@ -173,8 +173,10 @@ export default async function middleware(req) {
       margin-bottom: 24px;
     }
     .btn {
-      display: inline-block;
-      padding: 10px 24px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 22px;
       background: rgba(239, 68, 68, 0.2);
       border: 1px solid rgba(239, 68, 68, 0.5);
       color: #fca5a5;
@@ -189,6 +191,45 @@ export default async function middleware(req) {
       background: rgba(239, 68, 68, 0.4);
       color: #ffffff;
       border-color: #ef4444;
+    }
+    .btn-contact {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f1f5f9;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-contact:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+    }
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .creator-link {
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.2s ease;
+    }
+    .creator-link:hover {
+      color: #7dd3fc;
+      text-decoration: underline;
     }
     .sub {
       margin-top: 24px;
@@ -206,8 +247,14 @@ export default async function middleware(req) {
       RESTRICTED AREA // 401
     </div>
     <h1>Accès Refusé - Zone Sécurisée GEOINT</h1>
-    <p>Authentification requise pour accéder au système cartographique et aux flux satellitaires.<br><br>Si vous souhaitez obtenir un accès, veuillez contacter le créateur.</p>
-    <a href="javascript:location.reload()" class="btn">S'authentifier</a>
+    <p>Authentification requise pour accéder au système cartographique et aux flux satellitaires.<br><br>Si vous souhaitez obtenir un accès, veuillez contacter le créateur : <a href="https://x.com/ElMakhchouniX" target="_blank" rel="noopener noreferrer" class="creator-link">Søhäyb (@ElMakhchouniX)</a>.</p>
+    <div class="btn-group">
+      <a href="javascript:location.reload()" class="btn">S'authentifier</a>
+      <a href="https://x.com/ElMakhchouniX" target="_blank" rel="noopener noreferrer" class="btn-contact">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        Demander un accès (@ElMakhchouniX)
+      </a>
+    </div>
     <div class="sub">SYS_ID: GEOINT-FAR // STATUS: LOCKED</div>
   </div>
 </body>
