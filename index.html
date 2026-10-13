@@ -440,20 +440,21 @@
         </div>
 
         <!-- ACTIVE OPERATOR IDENTIFIER BADGE -->
-        <div id="operator-badge-box" style="margin-bottom: 20px; background: rgba(0, 25, 0, 0.6); border: 1px solid #1a551a; border-radius: 4px; padding: 10px 12px; font-family: 'Courier New', monospace; font-size: 11px;">
+        <div id="operator-badge-box" style="margin-bottom: 20px; background: rgba(0, 25, 0, 0.6); border: 1px solid #1a551a; border-radius: 4px; padding: 10px 12px; font-family: 'Courier New', monospace; font-size: 11px; transition: all 0.3s ease;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span style="color: #64748b; font-size: 10px; letter-spacing: 1.5px;">ACTIVE OPERATOR</span>
+                <span id="operator-role-label" style="color: #64748b; font-size: 10px; letter-spacing: 1.5px;">ACTIVE OPERATOR</span>
                 <span id="operator-clearance" style="background: rgba(0, 255, 0, 0.15); color: #0f0; border: 1px solid #0f0; padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold; letter-spacing: 1px;">VERIFIED</span>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="color: #0f0; font-weight: bold; font-size: 13px; letter-spacing: 1px; display: flex; align-items: center; gap: 6px;">
-                    <span style="display: inline-block; width: 7px; height: 7px; background: #0f0; border-radius: 50%; box-shadow: 0 0 6px #0f0;"></span>
-                    <span id="operator-callsign">AUTH_VERIFIED</span>
+                <div style="font-weight: bold; font-size: 13px; letter-spacing: 1px; display: flex; align-items: center; gap: 6px;">
+                    <span id="operator-beacon-dot" style="display: inline-block; width: 7px; height: 7px; background: #0f0; border-radius: 50%; box-shadow: 0 0 6px #0f0;"></span>
+                    <span id="operator-callsign" style="color: #0f0;">AUTH_VERIFIED</span>
                 </div>
                 <span id="operator-loc" style="color: #64748b; font-size: 10px;"></span>
             </div>
-            <a href="/admin" id="admin-panel-link" style="display: none; margin-top: 10px; text-align: center; background: rgba(239, 68, 68, 0.15); border: 1px solid #ef4444; color: #fca5a5; padding: 5px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.35)'" onmouseout="this.style.background='rgba(239,68,68,0.15)'">
-                [ 🛡️ ACCÈS REGISTRE AUDIT (/admin) ]
+            <div id="operator-level-sub" style="font-size: 9px; color: #475569; margin-top: 5px; letter-spacing: 1px;">LEVEL 02 // TACTICAL SURVEILLANCE</div>
+            <a href="/admin" id="admin-panel-link" style="display: none; margin-top: 10px; text-align: center; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.4)';this.style.boxShadow='0 0 10px rgba(239,68,68,0.4)'" onmouseout="this.style.background='rgba(239,68,68,0.2)';this.style.boxShadow='none'">
+                [ 👑 CONSOLE D&#39;AUDIT &amp; SÉCURITÉ (/admin) ]
             </a>
         </div>
         
@@ -1723,20 +1724,88 @@
                     const callsign = data.user.toUpperCase();
                     const callsignEl = document.getElementById('operator-callsign');
                     if (callsignEl) callsignEl.textContent = callsign;
-                    const wmEl = document.getElementById('watermark-callsign');
-                    if (wmEl) wmEl.textContent = callsign;
                     const locEl = document.getElementById('operator-loc');
                     if (locEl && data.country && data.country !== 'XX') locEl.textContent = '[' + data.country + ']';
 
+                    const badgeBox = document.getElementById('operator-badge-box');
+                    const roleLabel = document.getElementById('operator-role-label');
+                    const clrEl = document.getElementById('operator-clearance');
+                    const beaconDot = document.getElementById('operator-beacon-dot');
+                    const levelSub = document.getElementById('operator-level-sub');
+                    const adminLink = document.getElementById('admin-panel-link');
+                    const wmContainer = document.getElementById('operator-watermark');
+
                     if (data.isAdmin) {
-                        const adminLink = document.getElementById('admin-panel-link');
-                        if (adminLink) adminLink.style.display = 'block';
-                        const clrEl = document.getElementById('operator-clearance');
+                        // --- ROOT ADMIN ROLE ---
+                        if (badgeBox) {
+                            badgeBox.style.background = 'rgba(40, 10, 10, 0.75)';
+                            badgeBox.style.borderColor = 'rgba(239, 68, 68, 0.6)';
+                            badgeBox.style.boxShadow = '0 0 15px rgba(239, 68, 68, 0.25)';
+                        }
+                        if (roleLabel) {
+                            roleLabel.textContent = 'SUPREME COMMAND';
+                            roleLabel.style.color = '#f87171';
+                        }
+                        if (callsignEl) {
+                            callsignEl.style.color = '#ff6b6b';
+                        }
+                        if (beaconDot) {
+                            beaconDot.style.background = '#ef4444';
+                            beaconDot.style.boxShadow = '0 0 8px #ef4444';
+                        }
                         if (clrEl) {
-                            clrEl.textContent = 'ROOT_ADMIN';
+                            clrEl.textContent = '👑 ROOT_ADMIN';
                             clrEl.style.color = '#ef4444';
                             clrEl.style.borderColor = '#ef4444';
-                            clrEl.style.background = 'rgba(239, 68, 68, 0.2)';
+                            clrEl.style.background = 'rgba(239, 68, 68, 0.25)';
+                            clrEl.style.boxShadow = '0 0 6px rgba(239, 68, 68, 0.4)';
+                        }
+                        if (levelSub) {
+                            levelSub.textContent = 'LEVEL 01 // SUPREME CLEARANCE';
+                            levelSub.style.color = '#fca5a5';
+                        }
+                        if (adminLink) {
+                            adminLink.style.display = 'block';
+                        }
+                        if (wmContainer) {
+                            wmContainer.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+                            wmContainer.style.background = 'rgba(20, 0, 0, 0.65)';
+                            wmContainer.innerHTML = '👑 <span style="font-weight:bold;color:#fca5a5;">ROOT ADMIN: ' + callsign + '</span> // SUPREME CLEARANCE // GEOINT-FAR';
+                        }
+                    } else {
+                        // --- STANDARD OPERATOR / ANALYST ROLE ---
+                        const isAnalyst = data.role === 'analyst';
+                        if (badgeBox) {
+                            badgeBox.style.background = 'rgba(0, 25, 0, 0.6)';
+                            badgeBox.style.borderColor = '#1a551a';
+                        }
+                        if (roleLabel) {
+                            roleLabel.textContent = isAnalyst ? 'INTELLIGENCE ANALYST' : 'TACTICAL OPERATOR';
+                            roleLabel.style.color = '#64748b';
+                        }
+                        if (callsignEl) {
+                            callsignEl.style.color = '#0f0';
+                        }
+                        if (beaconDot) {
+                            beaconDot.style.background = '#0f0';
+                            beaconDot.style.boxShadow = '0 0 6px #0f0';
+                        }
+                        if (clrEl) {
+                            clrEl.textContent = isAnalyst ? '🎖️ ANALYST' : '🛡️ OPERATOR';
+                            clrEl.style.color = '#0f0';
+                            clrEl.style.borderColor = '#0f0';
+                            clrEl.style.background = 'rgba(0, 255, 0, 0.15)';
+                        }
+                        if (levelSub) {
+                            levelSub.textContent = isAnalyst ? 'LEVEL 02 // INTEL ANALYST' : 'LEVEL 02 // TACTICAL SURVEILLANCE';
+                            levelSub.style.color = '#64748b';
+                        }
+                        if (adminLink) {
+                            adminLink.remove(); // Completely remove /admin link for standard operators
+                        }
+                        if (wmContainer) {
+                            wmContainer.style.borderColor = 'rgba(0, 255, 0, 0.25)';
+                            wmContainer.innerHTML = '🛡️ <span style="font-weight:bold;color:#0f0;">OPERATOR: ' + callsign + '</span> // VERIFIED ANALYST // MONITORED SESSION';
                         }
                     }
                 }
