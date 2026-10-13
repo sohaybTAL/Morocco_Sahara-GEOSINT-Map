@@ -1,5 +1,6 @@
 import { next } from '@vercel/functions';
 import defaultUsers from './users.json';
+import defaultAlerts from './alerts.json';
 
 export const config = {
   matcher: '/(.*)',
@@ -68,6 +69,29 @@ function getAuthorizedUsers() {
   return users;
 }
 
+// Retrieve webhook configuration from env vars OR alerts.json
+function getWebhookConfig() {
+  let discord = (process.env.DISCORD_WEBHOOK_URL || '').trim();
+  let teleToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
+  let teleChat = (process.env.TELEGRAM_CHAT_ID || '').trim();
+
+  try {
+    if (defaultAlerts && typeof defaultAlerts === 'object') {
+      if (!discord && defaultAlerts.discord_webhook_url) {
+        discord = defaultAlerts.discord_webhook_url.trim();
+      }
+      if (!teleToken && defaultAlerts.telegram_bot_token) {
+        teleToken = defaultAlerts.telegram_bot_token.trim();
+      }
+      if (!teleChat && defaultAlerts.telegram_chat_id) {
+        teleChat = String(defaultAlerts.telegram_chat_id).trim();
+      }
+    }
+  } catch (e) {}
+
+  return { discord, teleToken, teleChat };
+}
+
 // Check if user has administrator privileges
 function isUserAdmin(username) {
   if (!username) return false;
@@ -83,7 +107,7 @@ function isUserAdmin(username) {
 
 // Record login event and dispatch instant webhook alerts (Discord / Telegram)
 function recordAndAlert(user, req) {
-  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'Unknown IP';
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'Direct Connection';
   const country = req.headers.get('x-vercel-ip-country') || 'XX';
   const city = req.headers.get('x-vercel-ip-city') || 'Unknown';
   const userAgent = req.headers.get('user-agent') || 'Unknown Client';
@@ -104,11 +128,11 @@ function recordAndAlert(user, req) {
 
   console.log(`[GEOINT_AUDIT] Operator: "${user}" | IP: ${ip} | Location: ${country}/${city} | Time: ${timestamp}`);
 
-  // Dispatch webhooks asynchronously
+  const webhooks = getWebhookConfig();
   const promises = [];
 
   // 1. Discord Webhook
-  if (process.env.DISCORD_WEBHOOK_URL) {
+  if (webhooks.discord) {
     const payload = {
       username: "GEOINT Sentinel",
       avatar_url: "https://pbs.twimg.com/profile_images/2014443944436756480/V07PR1oY_400x400.jpg",
@@ -128,7 +152,7 @@ function recordAndAlert(user, req) {
     };
 
     promises.push(
-      fetch(process.env.DISCORD_WEBHOOK_URL, {
+      fetch(webhooks.discord, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -137,7 +161,7 @@ function recordAndAlert(user, req) {
   }
 
   // 2. Telegram Bot
-  if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+  if (webhooks.teleToken && webhooks.teleChat) {
     const text = `🚨 *[CONNEXION GEOINT DÉTECTÉE]*\n\n` +
       `👤 *Opérateur:* \`${user}\`\n` +
       `🌍 *Lieu:* ${country} (${city})\n` +
@@ -146,11 +170,11 @@ function recordAndAlert(user, req) {
       `🖥️ *Client:* \`${userAgent.slice(0, 80)}\``;
 
     promises.push(
-      fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      fetch(`https://api.telegram.org/bot${webhooks.teleToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: process.env.TELEGRAM_CHAT_ID,
+          chat_id: webhooks.teleChat,
           text,
           parse_mode: 'Markdown'
         })
@@ -171,7 +195,7 @@ export default async function middleware(req) {
   let authenticatedUser = null;
   const usersMap = getAuthorizedUsers();
 
-  // Validate credentials against all registered user accounts
+  // 1. Validate credentials via HTTP Basic Auth header
   if (basicAuth && Object.keys(usersMap).length > 0) {
     try {
       const match = basicAuth.trim().match(/^Basic\s+(.+)$/i);
@@ -199,11 +223,23 @@ export default async function middleware(req) {
     }
   }
 
+  // 2. Fallback to operator cookie for internal API endpoints
+  if (!authenticatedUser) {
+    const cookieHeader = req.headers.get('cookie') || '';
+    const match = cookieHeader.match(/geoint_operator=([^;]+)/);
+    if (match && match[1]) {
+      const candidate = decodeURIComponent(match[1]);
+      if (usersMap[candidate]) {
+        authenticatedUser = candidate;
+      }
+    }
+  }
+
   // --- AUTHENTICATED REQUESTS ---
   if (authenticatedUser) {
     const url = new URL(req.url);
 
-    // 1. Dynamic Apple MapKit Satellite token endpoint
+    // Dynamic Apple MapKit Satellite token endpoint
     if (url.pathname === '/apple-key') {
       try {
         const ddgRes = await fetch('https://duckduckgo.com/local.js?get_mk_token=1', {
@@ -244,7 +280,7 @@ export default async function middleware(req) {
       }
     }
 
-    // 2. WhoAmI Endpoint (Returns caller identity for frontend UI & watermarking)
+    // WhoAmI Endpoint (Returns caller identity for frontend UI & watermarking)
     if (url.pathname === '/api/whoami') {
       return new Response(JSON.stringify({
         user: authenticatedUser,
@@ -259,7 +295,7 @@ export default async function middleware(req) {
       });
     }
 
-    // 3. Admin Logs API (JSON for dashboard)
+    // Admin Logs API (JSON for dashboard polling)
     if (url.pathname === '/api/admin/logs') {
       if (!isUserAdmin(authenticatedUser)) {
         return new Response(JSON.stringify({ error: 'Forbidden: Admin clearance required' }), {
@@ -267,12 +303,13 @@ export default async function middleware(req) {
           headers: { 'Content-Type': 'application/json' }
         });
       }
+      const webhooks = getWebhookConfig();
       return new Response(JSON.stringify({
         logs: ACCESS_LOGS,
         registeredUsers: Object.keys(usersMap),
         webhooks: {
-          discord: Boolean(process.env.DISCORD_WEBHOOK_URL),
-          telegram: Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID)
+          discord: Boolean(webhooks.discord),
+          telegram: Boolean(webhooks.teleToken && webhooks.teleChat)
         }
       }), {
         status: 200,
@@ -280,7 +317,16 @@ export default async function middleware(req) {
       });
     }
 
-    // 4. Admin Audit Dashboard UI (/admin)
+    // Track new user sessions
+    const cookieHeader = req.headers.get('cookie') || '';
+    const sessionCookieKey = `geoint_session_${authenticatedUser}`;
+    const isNewSession = !cookieHeader.includes(sessionCookieKey);
+
+    if (isNewSession) {
+      recordAndAlert(authenticatedUser, req);
+    }
+
+    // Admin Audit Dashboard UI (/admin)
     if (url.pathname === '/admin' || url.pathname === '/admin/') {
       if (!isUserAdmin(authenticatedUser)) {
         return new Response(renderForbiddenPage(authenticatedUser), {
@@ -294,21 +340,11 @@ export default async function middleware(req) {
       });
     }
 
-    // 5. Track page loads and send alert if this is a fresh visit
-    const cookieHeader = req.headers.get('cookie') || '';
-    const alertCookieKey = `geoint_alert_${authenticatedUser}`;
-    const shouldAlert = !cookieHeader.includes(alertCookieKey) && 
-      (url.pathname === '/' || url.pathname === '/index.html' || url.pathname === '');
-
-    if (shouldAlert) {
-      recordAndAlert(authenticatedUser, req);
-    }
-
     // Continue to static files & attach operator cookie
     const res = next();
     res.headers.set('Set-Cookie', `geoint_operator=${encodeURIComponent(authenticatedUser)}; Path=/; SameSite=Lax; Max-Age=86400`);
-    if (shouldAlert) {
-      res.headers.append('Set-Cookie', `${alertCookieKey}=1; Path=/; SameSite=Lax; Max-Age=1800`);
+    if (isNewSession) {
+      res.headers.append('Set-Cookie', `${sessionCookieKey}=1; Path=/; SameSite=Lax; Max-Age=1800`);
     }
     return res;
   }
@@ -508,15 +544,17 @@ function renderForbiddenPage(user) {
 
 function renderAdminDashboard(adminUser, usersMap) {
   const usersList = Object.keys(usersMap);
-  const discordConfigured = Boolean(process.env.DISCORD_WEBHOOK_URL);
-  const telegramConfigured = Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID);
+  const webhooks = getWebhookConfig();
+  const discordConfigured = Boolean(webhooks.discord);
+  const telegramConfigured = Boolean(webhooks.teleToken && webhooks.teleChat);
+  const serverLogsJson = JSON.stringify(ACCESS_LOGS);
 
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GEOINT Security Sentinel // Audit & Contrôle d'Accès</title>
+  <title>GEOINT Sentinel // Audit & Contrôle d'Accès</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -577,7 +615,7 @@ function renderAdminDashboard(adminUser, usersMap) {
     .stat-card.red { border-left-color: #ef4444; }
     .stat-card.blue { border-left-color: #38bdf8; }
     .stat-label { font-size: 11px; color: #64748b; letter-spacing: 1px; text-transform: uppercase; }
-    .stat-val { font-size: 20px; font-weight: bold; color: #fff; margin-top: 4px; }
+    .stat-val { font-size: 18px; font-weight: bold; color: #fff; margin-top: 4px; }
     .section {
       background: rgba(15, 23, 42, 0.8);
       border: 1px solid #1e293b;
@@ -600,13 +638,14 @@ function renderAdminDashboard(adminUser, usersMap) {
     tr:hover { background: rgba(255, 255, 255, 0.02); }
     .badge-user {
       display: inline-block;
-      padding: 2px 8px;
+      padding: 3px 10px;
       border-radius: 3px;
       background: rgba(0, 255, 0, 0.15);
       border: 1px solid #0f0;
       color: #0f0;
       font-weight: bold;
-      font-size: 11px;
+      font-size: 12px;
+      letter-spacing: 1px;
     }
     .badge-admin {
       background: rgba(239, 68, 68, 0.2);
@@ -618,7 +657,7 @@ function renderAdminDashboard(adminUser, usersMap) {
       align-items: center;
       gap: 5px;
       font-size: 11px;
-      padding: 2px 6px;
+      padding: 3px 8px;
       border-radius: 3px;
     }
     .status-active { background: rgba(0, 255, 0, 0.15); color: #0f0; border: 1px solid #0f0; }
@@ -665,7 +704,7 @@ function renderAdminDashboard(adminUser, usersMap) {
       </div>
       <div class="stat-card blue">
         <div class="stat-label">Sessions Enregistrées</div>
-        <div class="stat-val" id="total-sessions-count">CHARGEMENT...</div>
+        <div class="stat-val" id="total-sessions-count">0 SESSIONS</div>
       </div>
       <div class="stat-card red">
         <div class="stat-label">Alerte Discord</div>
@@ -698,9 +737,8 @@ function renderAdminDashboard(adminUser, usersMap) {
         `).join('')}
       </div>
       <div class="guide-box">
-        <strong>💡 Comment ajouter ou supprimer des utilisateurs :</strong><br>
-        1. Modifiez le fichier local <code>users.json</code> dans votre projet (ex: <code>{"admin": "motdepasse", "nouvel_analyste": "pass2026"}</code>).<br>
-        2. OU ajoutez la variable d'environnement <code>AUTHORIZED_USERS</code> dans votre tableau de bord <strong>Vercel &rarr; Settings &rarr; Environment Variables</strong> (format : <code>user1:pass1,user2:pass2</code>).
+        <strong>💡 Comment gérer les comptes :</strong><br>
+        Modifiez simplement le fichier <code>users.json</code> dans votre projet (ex: <code>{"admin": "motdepasse", "matrix": "pass2026"}</code>) et redéployez.
       </div>
     </div>
 
@@ -727,7 +765,7 @@ function renderAdminDashboard(adminUser, usersMap) {
             </tr>
           </thead>
           <tbody id="logs-tbody">
-            <tr><td colspan="5" style="text-align: center; color: #64748b;">Chargement des données d'audit...</td></tr>
+            <tr><td colspan="5" style="text-align: center; color: #64748b; padding: 25px;">Chargement des données d'audit...</td></tr>
           </tbody>
         </table>
       </div>
@@ -736,17 +774,15 @@ function renderAdminDashboard(adminUser, usersMap) {
     <!-- INSTANT WEBHOOK CONFIGURATION GUIDE -->
     <div class="section">
       <div class="section-header">
-        <h2>⚡ CONFIGURATION DES ALERTES INSTANTANÉES (DISCORD & TELEGRAM)</h2>
+        <h2>⚡ CONFIGURATION DES ALERTES (DISCORD & TELEGRAM)</h2>
       </div>
       <div class="guide-box">
-        Pour recevoir une notification automatique sur votre téléphone à chaque fois qu'un utilisateur accède au site :<br><br>
-        <strong>Option A : Discord</strong><br>
-        - Créez un webhook dans votre serveur Discord (Paramètres du salon &rarr; Intégrations &rarr; Webhooks).<br>
-        - Ajoutez la variable <code>DISCORD_WEBHOOK_URL</code> dans vos paramètres Vercel avec l'URL copiée.<br><br>
-        <strong>Option B : Telegram</strong><br>
-        - Créez un bot via @BotFather et récupérez le token.<br>
-        - Ajoutez <code>TELEGRAM_BOT_TOKEN</code> et <code>TELEGRAM_CHAT_ID</code> dans vos paramètres Vercel.<br><br>
-        <em>Dès qu'un opérateur se connecte, une alerte détaillée (Nom, IP, Pays, Heure) est instantanément envoyée.</em>
+        Vous pouvez configurer les alertes de <strong>deux façons simples</strong> :<br><br>
+        <strong>Méthode 1 : Fichier local <code>alerts.json</code> (Le plus rapide)</strong><br>
+        Ouvrez <code>alerts.json</code> dans le dossier du projet et collez directement votre webhook :<br>
+        <code>{"discord_webhook_url": "https://discord.com/api/webhooks/...", "telegram_bot_token": "...", "telegram_chat_id": "..."}</code><br><br>
+        <strong>Méthode 2 : Variables Vercel</strong><br>
+        Ajoutez <code>DISCORD_WEBHOOK_URL</code> ou <code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code> dans <strong>Vercel &rarr; Settings &rarr; Environment Variables</strong>, puis cliquez sur <strong>Redeploy</strong>.
       </div>
     </div>
   </div>
@@ -754,21 +790,31 @@ function renderAdminDashboard(adminUser, usersMap) {
   <script>
     let localLogHistory = [];
 
-    // Load persistent logs from localStorage
+    // 1. Load persistent logs from localStorage
     try {
       const saved = localStorage.getItem('geoint_audit_history');
       if (saved) localLogHistory = JSON.parse(saved);
     } catch(e) {}
 
+    // 2. Load server-rendered logs directly
+    const serverLogs = ${serverLogsJson} || [];
+    const mergeMap = new Map();
+    serverLogs.forEach(item => mergeMap.set(item.id || (item.timestamp + item.user), item));
+    localLogHistory.forEach(item => mergeMap.set(item.id || (item.timestamp + item.user), item));
+    localLogHistory = Array.from(mergeMap.values()).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+    try { localStorage.setItem('geoint_audit_history', JSON.stringify(localLogHistory)); } catch(e){}
+
     function renderTable(logs) {
       const tbody = document.getElementById('logs-tbody');
+      const counter = document.getElementById('total-sessions-count');
+
       if (!logs || logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 20px;">Aucune session enregistrée pour le moment. Connectez-vous depuis un navigateur pour générer le premier log.</td></tr>';
-        document.getElementById('total-sessions-count').textContent = '0 SESSIONS';
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #64748b; padding: 25px;">📡 Aucun journal de session pour le moment.<br><span style="font-size:11px;color:#475569;">Les connexions apparaîtront ici dès qu\'un opérateur visite la carte.</span></td></tr>';
+        if (counter) counter.textContent = '0 SESSIONS';
         return;
       }
 
-      document.getElementById('total-sessions-count').textContent = logs.length + ' SESSIONS';
+      if (counter) counter.textContent = logs.length + ' SESSIONS';
 
       tbody.innerHTML = logs.map(l => {
         const d = new Date(l.timestamp);
@@ -785,15 +831,18 @@ function renderAdminDashboard(adminUser, usersMap) {
       }).join('');
     }
 
+    // Immediately render current logs
+    renderTable(localLogHistory);
+
     async function fetchLatestLogs() {
       try {
-        const res = await fetch('/api/admin/logs');
-        if (!res.ok) throw new Error('Failed to fetch');
+        const res = await fetch('/api/admin/logs', { credentials: 'include' });
+        if (!res.ok) return;
         const data = await res.json();
+        if (!data || !data.logs) return;
         
-        // Merge fetched logs with persistent local history
         const map = new Map();
-        (data.logs || []).forEach(item => map.set(item.id || (item.timestamp + item.user), item));
+        data.logs.forEach(item => map.set(item.id || (item.timestamp + item.user), item));
         localLogHistory.forEach(item => map.set(item.id || (item.timestamp + item.user), item));
         
         localLogHistory = Array.from(map.values()).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
@@ -801,8 +850,7 @@ function renderAdminDashboard(adminUser, usersMap) {
         
         renderTable(localLogHistory);
       } catch(err) {
-        console.warn('Using local history:', err);
-        renderTable(localLogHistory);
+        console.warn('Sync notice:', err);
       }
     }
 
@@ -821,15 +869,14 @@ function renderAdminDashboard(adminUser, usersMap) {
     function exportLogsJson() {
       const text = JSON.stringify(localLogHistory, null, 2);
       navigator.clipboard.writeText(text).then(() => {
-        alert('Journal d\'audit copié dans le presse-papier !');
+        alert("Journal d'audit copié dans le presse-papier !");
       }).catch(() => {
-        prompt('Copiez les logs ci-dessous :', text);
+        prompt("Copiez les logs ci-dessous :", text);
       });
     }
 
-    // Initial fetch and auto-refresh every 12 seconds
-    fetchLatestLogs();
-    setInterval(fetchLatestLogs, 12000);
+    // Background sync every 10 seconds
+    setInterval(fetchLatestLogs, 10000);
   </script>
 </body>
 </html>`;
