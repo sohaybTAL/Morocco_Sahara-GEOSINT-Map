@@ -584,6 +584,50 @@ export default async function middleware(req, event) {
     }
   }
 
+  // 3. Explicit Logout Handler (Revokes session tokens, deletes cookies, and clears client storage)
+  if (url.pathname === '/logout' || url.pathname === '/logout/' || url.pathname === '/api/logout') {
+    const forwardedProto = (req.headers.get('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
+    let isProdEnv = false;
+    try {
+      isProdEnv = process.env.NODE_ENV === 'production';
+    } catch (e) {}
+    const isSecure = url.protocol === 'https:' ||
+      forwardedProto === 'https' ||
+      isProdEnv;
+    const secureAttr = isSecure ? '; Secure' : '';
+
+    const logoutHeaders = new Headers();
+    logoutHeaders.append('Set-Cookie', `geoint_auth=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secureAttr}`);
+    logoutHeaders.append('Set-Cookie', `geoint_operator=; Path=/; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secureAttr}`);
+    if (authenticatedUser) {
+      const sessionCookieKey = `geoint_session_${encodeURIComponent(authenticatedUser)}`;
+      logoutHeaders.append('Set-Cookie', `${sessionCookieKey}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT${secureAttr}`);
+    }
+    logoutHeaders.set('Clear-Site-Data', '"cookies", "storage"');
+    logoutHeaders.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+
+    if (url.pathname === '/api/logout') {
+      logoutHeaders.set('Content-Type', 'application/json');
+      if (basicAuth && !authenticatedUser) {
+        logoutHeaders.set('WWW-Authenticate', 'Basic realm="Zone Securisee GEOINT"');
+        return new Response(JSON.stringify({ success: true, loggedOut: true }), {
+          status: 401,
+          headers: logoutHeaders
+        });
+      }
+      return new Response(JSON.stringify({ success: true, loggedOut: true }), {
+        status: 200,
+        headers: logoutHeaders
+      });
+    }
+
+    logoutHeaders.set('Content-Type', 'text/html; charset=utf-8');
+    return new Response(renderLogoutPage(), {
+      status: 200,
+      headers: logoutHeaders
+    });
+  }
+
   // --- AUTHENTICATED REQUESTS ---
   if (authenticatedUser) {
     const url = new URL(req.url);
@@ -792,6 +836,185 @@ export default async function middleware(req, event) {
 // -------------------------------------------------------------
 // HTML TEMPLATES
 // -------------------------------------------------------------
+
+function renderLogoutPage() {
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Session Clôturée - Zone Sécurisée GEOINT</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background-color: #080c14;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 20px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.9);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      border-radius: 12px;
+      box-shadow: 0 0 50px rgba(0, 0, 0, 0.8), 0 0 25px rgba(16, 185, 129, 0.15);
+      padding: 40px 32px;
+      max-width: 480px;
+      width: 100%;
+      backdrop-filter: blur(8px);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      margin-bottom: 20px;
+      font-family: monospace;
+    }
+    .badge-dot {
+      width: 6px;
+      height: 6px;
+      background-color: #10b981;
+      border-radius: 50%;
+      box-shadow: 0 0 6px #10b981;
+    }
+    h1 {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #ffffff;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+    p {
+      color: #94a3b8;
+      font-size: 13.5px;
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 10px 22px;
+      background: rgba(16, 185, 129, 0.2);
+      border: 1px solid rgba(16, 185, 129, 0.5);
+      color: #6ee7b7;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn:hover {
+      background: rgba(16, 185, 129, 0.4);
+      color: #ffffff;
+      border-color: #10b981;
+      box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+    }
+    .btn-contact {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 10px 20px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #f1f5f9;
+      font-size: 13px;
+      font-weight: 600;
+      border-radius: 6px;
+      text-decoration: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .btn-contact:hover {
+      background: rgba(255, 255, 255, 0.15);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+    }
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .creator-link {
+      color: #38bdf8;
+      text-decoration: none;
+      font-weight: 600;
+      transition: color 0.2s ease;
+    }
+    .creator-link:hover {
+      color: #7dd3fc;
+      text-decoration: underline;
+    }
+    .sub {
+      margin-top: 24px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: #64748b;
+      letter-spacing: 1px;
+    }
+  </style>
+  <script>
+    function relogin(e) {
+      if (e) e.preventDefault();
+      var redirected = false;
+      function go() {
+        if (!redirected) {
+          redirected = true;
+          window.location.href = '/';
+        }
+      }
+      setTimeout(go, 600);
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/api/logout', true, 'reconnect_' + Date.now(), 'invalid');
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) go();
+        };
+        xhr.send();
+      } catch (err) {
+        go();
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">
+      <span class="badge-dot"></span>
+      SESSION CLÔTURÉE // 200 OK
+    </div>
+    <h1>Session Terminée</h1>
+    <p>Votre session opérateur a été fermée avec succès.<br><br>Les jetons d'accès cryptographiques et les autorisations locales ont été révoqués sur ce terminal.</p>
+    <div class="btn-group">
+      <a href="/" onclick="relogin(event)" class="btn">Se reconnecter</a>
+      <a href="https://x.com/ElMakhchouniX" target="_blank" rel="noopener noreferrer" class="btn-contact">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        Søhäyb (@ElMakhchouniX)
+      </a>
+    </div>
+    <div class="sub">SYS_ID: GEOINT-FAR // STATUS: LOGGED_OUT</div>
+  </div>
+</body>
+</html>`;
+}
 
 function render401Page() {
   return `<!DOCTYPE html>
@@ -1243,8 +1466,9 @@ function renderAdminDashboard(adminUser, usersMap) {
         <h1><span>🛡️</span> [ GEOINT SENTINEL // REGISTRE D'ACCÈS & AUDIT ]</h1>
         <p>CONSOLE DE COMMANDEMENT SÉCURISÉE &bull; OPÉRATEUR ACTIF : <strong style="color: #0f0;">${safeAdminUpper}</strong> (ROOT)</p>
       </div>
-      <div>
+      <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         <a href="/" class="btn-tactical">&larr; ACCÉDER À LA CARTE</a>
+        <button onclick="performLogout()" class="btn-tactical" style="background: rgba(239, 68, 68, 0.2); border-color: #ef4444; color: #fca5a5;">🚪 DÉCONNEXION</button>
       </div>
     </div>
 
@@ -1608,6 +1832,32 @@ function renderAdminDashboard(adminUser, usersMap) {
         }
       } catch (e) {
         alert("Erreur lors de l'envoi du test : " + e);
+      }
+    }
+
+    function performLogout() {
+      if (!confirm("Confirmer la deconnexion de la console d'audit ?")) return;
+      try {
+        localStorage.removeItem("geoint_operator");
+        sessionStorage.clear();
+      } catch (e) {}
+      var redirected = false;
+      function go() {
+        if (!redirected) {
+          redirected = true;
+          window.location.href = "/logout";
+        }
+      }
+      setTimeout(go, 600);
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open("GET", "/api/logout", true, "logout_" + Date.now(), "logout");
+        xhr.onreadystatechange = function() {
+          if (xhr.readyState === 4) go();
+        };
+        xhr.send();
+      } catch (e) {
+        go();
       }
     }
 

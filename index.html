@@ -804,9 +804,14 @@
                 <span>OPERATOR LEVEL 02</span>
                 <span>TACTICAL SURVEILLANCE</span>
             </div>
-            <a href="/admin" id="admin-panel-link" style="display: none; margin-top: 8px; text-align: center; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 10px; border-radius: 3px; font-size: 11.5px; font-weight: bold; text-decoration: none; transition: 0.2s;">
-                [ 👑 CONSOLE D&#39;AUDIT &amp; SÉCURITÉ (/admin) ]
-            </a>
+            <div id="operator-actions-bar" style="margin-top: 8px; display: flex; gap: 6px;">
+                <a href="/admin" id="admin-panel-link" style="display: none; flex: 1; text-align: center; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-decoration: none; transition: 0.2s;">
+                    👑 AUDIT (/admin)
+                </a>
+                <button onclick="performLogout()" id="logout-btn" title="Fermer la session opérateur" style="flex: 1; background: rgba(255, 255, 255, 0.05); border: 1px solid #334155; color: #94a3b8; padding: 6px 10px; border-radius: 3px; font-size: 11px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 4px;" onmouseover="this.style.borderColor='#ef4444';this.style.color='#fca5a5';this.style.background='rgba(239,68,68,0.15)'" onmouseout="this.style.borderColor='#334155';this.style.color='#94a3b8';this.style.background='rgba(255,255,255,0.05)'">
+                    <span>🚪</span> <span id="logout-label">DÉCONNEXION</span>
+                </button>
+            </div>
         </div>
         
         <h2>Satellite Feed</h2>
@@ -1861,6 +1866,14 @@
                 let val = e.target.value.trim();
                 if (!val) return;
                 
+                if (val.toLowerCase() === 'logout' || val.toLowerCase() === 'exit') {
+                    e.target.value = '';
+                    const box = document.getElementById('cmd-suggestions');
+                    if (box) box.style.display = 'none';
+                    performLogout();
+                    return;
+                }
+
                 let parsed = parseCoordinates(val);
                 if (parsed) {
                     executeCoordinateDrop(parsed.lat, parsed.lng, 'CIBLE COORDONNÉES GPS');
@@ -2528,7 +2541,9 @@
             "VERIFIED": "VÉRIFIÉ",
             "WATCHLIST & BOOKMARKS": "CIBLES FAVORITES & WATCHLIST",
             "+ PIN MAP CENTER": "+ ÉPINGLER CENTRE CARTE",
-            "🗑 VIDER": "🗑 VIDER"
+            "🗑 VIDER": "🗑 VIDER",
+            "LOGOUT": "DÉCONNEXION",
+            "LOG OUT": "DÉCONNEXION"
         };
 
         let currentLang = 'en';
@@ -2565,6 +2580,10 @@
             let cmd = document.getElementById('cmd-input');
             if (cmd) {
                 cmd.placeholder = lang === 'fr' ? 'Chercher Base ou Coller Lat,Lng...' : 'Search Base Name or Paste Lat,Lng...';
+            }
+            let logoutLbl = document.getElementById('logout-label');
+            if (logoutLbl) {
+                logoutLbl.textContent = lang === 'fr' ? 'DÉCONNEXION' : 'LOG OUT';
             }
             
             currentLang = lang;
@@ -2758,6 +2777,34 @@
                 }
             })
             .catch(() => {});
+
+        function performLogout() {
+            if (!confirm('Confirmer la déconnexion de la session tactique ?')) return;
+            try {
+                localStorage.removeItem('geoint_operator');
+                localStorage.removeItem('geoint_audit_history');
+                sessionStorage.clear();
+            } catch (e) {}
+
+            var redirected = false;
+            function go() {
+                if (!redirected) {
+                    redirected = true;
+                    window.location.href = '/logout';
+                }
+            }
+            setTimeout(go, 600);
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open('GET', '/api/logout', true, 'logout_' + Date.now(), 'logout');
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) go();
+                };
+                xhr.send();
+            } catch (e) {
+                go();
+            }
+        }
         // ==========================================
         // TACTICAL BOUSSOLE / COMPASS INTERACTION ENGINE
         // ==========================================
