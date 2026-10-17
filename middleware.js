@@ -524,6 +524,158 @@ function recordAndAlert(user, req, usersMap = {}, event = null, nowMs = Date.now
 }
 
 // -------------------------------------------------------------
+// REAL-TIME SECURITY THREAT & INTRUSION DETECTION ALERT ENGINE
+// -------------------------------------------------------------
+const LAST_SECURITY_ALERT = new Map();
+const SECURITY_ALERT_COOLDOWN_MS = 10000; // 10s cooldown per threat type/source
+
+function sendSecurityThreatAlert({ type, user, route, reason, req, usersMap = {}, event = null, details = '' }) {
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'Direct Connection';
+  const country = req.headers.get('x-vercel-ip-country') || 'XX';
+  const city = req.headers.get('x-vercel-ip-city') || 'Unknown';
+  const userAgent = req.headers.get('user-agent') || 'Unknown Client';
+  const nowMs = Date.now();
+  const timestamp = new Date(nowMs).toISOString();
+
+  const alertKey = `${type}:${user || ip}:${route}`;
+  const lastTs = LAST_SECURITY_ALERT.get(alertKey);
+  if (typeof lastTs === 'number' && (nowMs - lastTs) < SECURITY_ALERT_COOLDOWN_MS && (nowMs >= lastTs)) {
+    return Promise.resolve([]);
+  }
+  LAST_SECURITY_ALERT.set(alertKey, nowMs);
+
+  const profile = user ? getUserProfile(user, usersMap) : {
+    user: 'Non authentifié / Sonde externe',
+    role: 'unauthorized',
+    roleTag: 'UNAUTHORIZED_PROBE',
+    roleTitle: 'Sonde Non Authentifiée',
+    clearance: 'NONE // BLOCKED',
+    isAdmin: false
+  };
+
+  const threatEntry = {
+    id: `${nowMs}-${Math.random().toString(36).slice(2, 7)}`,
+    user: user || `SONDE:${ip}`,
+    role: profile.role,
+    roleTag: type === 'ADMIN_BREACH_ATTEMPT' ? '🚨 ADMIN_INTRUSION' : '🚨 DATA_EXTRACTION',
+    roleTitle: profile.roleTitle,
+    clearance: profile.clearance,
+    isAdmin: false,
+    threatAlert: true,
+    alertType: type,
+    reason,
+    route,
+    ip,
+    country,
+    city,
+    userAgent,
+    timestamp
+  };
+
+  ACCESS_LOGS.unshift(threatEntry);
+  if (ACCESS_LOGS.length > MAX_LOGS) ACCESS_LOGS.pop();
+
+  console.warn(`[GEOINT_SECURITY_ALERT] Type: ${type} | User: ${user || ip} | Route: ${route} | IP: ${ip} | Reason: ${reason}`);
+
+  const webhooks = getWebhookConfig();
+  const promises = [];
+
+  // 1. Discord Webhook
+  if (webhooks.discord) {
+    let embedTitle, embedDesc, embedColor;
+    if (type === 'ADMIN_BREACH_ATTEMPT') {
+      embedTitle = "🚨👑 [ALERTE SÉCURITÉ] Tentative d'Accès aux Privilèges Root / Admin";
+      embedDesc = "⚠️ **Tentative d'accès non autorisé à une zone administrative protégée.**\nL'utilisateur ou l'IP a tenté de franchir le contrôle d'accès du Commandement Suprême. La requête a été interceptée et rejetée (HTTP 403 / 401).";
+      embedColor = 0xef4444; // Red
+    } else if (type === 'DATA_EXTRACTION_ATTEMPT') {
+      embedTitle = "🚨🗺️ [ALERTE SÉCURITÉ] Tentative d'Extraction des Données Cartographiques";
+      embedDesc = "⚠️ **Tentative de téléchargement ou d'aspiration directe de `map_data.js`.**\nUn accès direct, un outil automatisé ou un contournement de navigation cartographique a été détecté. La requête a été interceptée.";
+      embedColor = 0xf97316; // Orange
+    } else {
+      embedTitle = "🚨 [ALERTE SÉCURITÉ GEOINT] Incident de Sécurité Détecté";
+      embedDesc = "⚠️ **Incident de sécurité détecté sur la passerelle GEOINT.**";
+      embedColor = 0xff0000;
+    }
+
+    const payload = {
+      username: "GEOINT Sentinel - Alerte Sécurité",
+      avatar_url: "https://pbs.twimg.com/profile_images/2014443944436756480/V07PR1oY_400x400.jpg",
+      embeds: [{
+        title: embedTitle,
+        description: embedDesc,
+        color: embedColor,
+        fields: [
+          { name: "👤 Opérateur / Source", value: user ? `\`${user}\` (${profile.roleTitle})` : `\`Anonyme / Non Authentifié\``, inline: true },
+          { name: "🎯 Route Ciblée", value: `\`${route}\``, inline: true },
+          { name: "🛑 Action Appliquée", value: "⛔ **BLOCAGE IMMÉDIAT (403 / 401)**", inline: true },
+          { name: "🔍 Motif de l'Alerte", value: reason || "Non spécifié", inline: false },
+          { name: "🌍 Localisation", value: `${country} (${city})`, inline: true },
+          { name: "🌐 Adresse IP", value: `\`${ip}\``, inline: true },
+          { name: "⏱️ Horodatage (UTC)", value: timestamp, inline: true },
+          { name: "🖥️ Agent / Outil Utilisé", value: `\`${userAgent.slice(0, 150)}\``, inline: false }
+        ],
+        footer: { text: "Morocco Sahara GEOINT • Système Automatisé de Détection d'Intrusion" }
+      }]
+    };
+
+    promises.push(
+      Promise.resolve().then(() => fetch(webhooks.discord, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      })).catch(err => {
+        console.error('[WEBHOOK] Threat Discord error:', err);
+        return Promise.reject(err);
+      })
+    );
+  }
+
+  // 2. Telegram Bot
+  if (webhooks.teleToken && webhooks.teleChat) {
+    const iconHeader = type === 'ADMIN_BREACH_ATTEMPT'
+      ? `🚨👑 *[ALERTE SÉCURITÉ: TENTATIVE ACCÈS ROOT / ADMIN]*`
+      : `🚨🗺️ *[ALERTE SÉCURITÉ: EXTRACTION DONNÉES MAP_DATA]*`;
+
+    const text = `${iconHeader}\n\n` +
+      `⚠️ *Incident:* ${reason}\n` +
+      `👤 *Source:* \`${user || 'Anonyme'}\` (${profile.roleTitle})\n` +
+      `🎯 *Route Cible:* \`${route}\`\n` +
+      `🛑 *Action:* ⛔ *BLOCAGE (403/401)*\n` +
+      `🌍 *Lieu:* ${country} (${city})\n` +
+      `🌐 *IP:* \`${ip}\`\n` +
+      `⏱️ *Heure (UTC):* ${timestamp}\n` +
+      `🖥️ *Client:* \`${userAgent.slice(0, 80)}\``;
+
+    promises.push(
+      Promise.resolve().then(() => fetch(`https://api.telegram.org/bot${webhooks.teleToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: webhooks.teleChat,
+          text,
+          parse_mode: 'Markdown'
+        })
+      })).catch(err => {
+        console.error('[WEBHOOK] Threat Telegram error:', err);
+        return Promise.reject(err);
+      })
+    );
+  }
+
+  if (promises.length === 0) {
+    return Promise.resolve([]);
+  }
+
+  const settledPromise = Promise.allSettled(promises);
+  if (event && typeof event.waitUntil === 'function') {
+    try {
+      event.waitUntil(settledPromise);
+    } catch (e) {}
+  }
+  return settledPromise;
+}
+
+// -------------------------------------------------------------
 // MAIN MIDDLEWARE ENTRY POINT
 // -------------------------------------------------------------
 export default async function middleware(req, event) {
@@ -705,6 +857,15 @@ export default async function middleware(req, event) {
     // Admin Logs API (JSON for dashboard polling)
     if (url.pathname === '/api/admin/logs') {
       if (!isUserAdmin(authenticatedUser, usersMap)) {
+        sendSecurityThreatAlert({
+          type: 'ADMIN_BREACH_ATTEMPT',
+          user: authenticatedUser,
+          route: '/api/admin/logs',
+          reason: "Opérateur sans privilèges administrateur tentant d'extraire les journaux d'audit",
+          req,
+          usersMap,
+          event
+        });
         return new Response(JSON.stringify({ error: 'Forbidden: Admin clearance required' }), {
           status: 403,
           headers: { 'Content-Type': 'application/json' }
@@ -742,6 +903,15 @@ export default async function middleware(req, event) {
     // Test Webhook API
     if (url.pathname === '/api/admin/test-webhook') {
       if (!isUserAdmin(authenticatedUser, usersMap)) {
+        sendSecurityThreatAlert({
+          type: 'ADMIN_BREACH_ATTEMPT',
+          user: authenticatedUser,
+          route: '/api/admin/test-webhook',
+          reason: "Opérateur sans privilèges administrateur tentant de déclencher le test webhook",
+          req,
+          usersMap,
+          event
+        });
         return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: { 'Content-Type': 'application/json' } });
       }
       const webhooks = getWebhookConfig();
@@ -791,6 +961,15 @@ export default async function middleware(req, event) {
     // Admin Audit Dashboard UI (/admin)
     if (url.pathname === '/admin' || url.pathname === '/admin/') {
       if (!isUserAdmin(authenticatedUser, usersMap)) {
+        sendSecurityThreatAlert({
+          type: 'ADMIN_BREACH_ATTEMPT',
+          user: authenticatedUser,
+          route: url.pathname,
+          reason: "Opérateur sans privilèges administrateur tentant d'accéder au registre d'audit /admin",
+          req,
+          usersMap,
+          event
+        });
         return new Response(renderForbiddenPage(authenticatedUser, usersMap), {
           status: 403,
           headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
@@ -812,6 +991,67 @@ export default async function middleware(req, event) {
       return adminRes;
     }
 
+    // Client-side Security Alert Beacon API (/api/security/alert)
+    if (url.pathname === '/api/security/alert') {
+      let clientReason = "Alerte anti-extraction de données cartographiques déclenchée côté client";
+      try {
+        if (req.method === 'POST') {
+          const body = await req.json().catch(() => ({}));
+          if (body && typeof body.reason === 'string' && body.reason.trim()) {
+            clientReason = body.reason.slice(0, 250);
+          }
+        }
+      } catch (e) {}
+      sendSecurityThreatAlert({
+        type: 'DATA_EXTRACTION_ATTEMPT',
+        user: authenticatedUser,
+        route: '/api/security/alert',
+        reason: clientReason,
+        req,
+        usersMap,
+        event
+      });
+      return new Response(JSON.stringify({ status: 'alert_logged' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+      });
+    }
+
+    // Map Data Anti-Extraction Shield (/map_data.js)
+    if (url.pathname === '/map_data.js' || url.pathname.endsWith('/map_data.js')) {
+      const secFetchDest = (req.headers.get('sec-fetch-dest') || '').toLowerCase();
+      const secFetchMode = (req.headers.get('sec-fetch-mode') || '').toLowerCase();
+      const userAgent = (req.headers.get('user-agent') || '').toLowerCase();
+      const referer = req.headers.get('referer') || '';
+      const acceptHeader = (req.headers.get('accept') || '').toLowerCase();
+
+      // Detect direct browser tab navigation, scrapers, automated downloaders, or missing context
+      const isDirectNavigation = secFetchDest === 'document' || secFetchMode === 'navigate' || acceptHeader.includes('text/html');
+      const isScraperTool = /curl|wget|python|postman|scrapy|httpie|node-fetch|axios|go-http-client|urllib/i.test(userAgent);
+      const isMissingScriptContext = !secFetchDest && !referer;
+
+      if (isDirectNavigation || isScraperTool || isMissingScriptContext) {
+        sendSecurityThreatAlert({
+          type: 'DATA_EXTRACTION_ATTEMPT',
+          user: authenticatedUser,
+          route: url.pathname,
+          reason: isScraperTool
+            ? `Outil de scraping / téléchargement automatisé détecté (${userAgent.slice(0, 50)})`
+            : "Tentative d'ouverture ou d'extraction directe de map_data.js dans le navigateur",
+          req,
+          usersMap,
+          event
+        });
+        return new Response('/* 403 FORBIDDEN: Direct extraction of map_data.js is restricted. */\nconsole.warn("[GEOINT SENTINEL] Direct extraction of military geospatial dataset is blocked and recorded.");', {
+          status: 403,
+          headers: {
+            'Content-Type': 'text/javascript; charset=utf-8',
+            'Cache-Control': 'no-store'
+          }
+        });
+      }
+    }
+
     // Continue to static files & attach signed session token cookie
     const res = next();
     if (signedSessionToken) {
@@ -824,6 +1064,29 @@ export default async function middleware(req, event) {
   }
 
   // --- UNAUTHENTICATED (HTTP 401 GATEWAY) ---
+  // Detect probes targeting sensitive admin routes or map datasets before authentication
+  if (url.pathname === '/admin' || url.pathname.startsWith('/admin/') || url.pathname.startsWith('/api/admin/')) {
+    sendSecurityThreatAlert({
+      type: 'ADMIN_BREACH_ATTEMPT',
+      user: null,
+      route: url.pathname,
+      reason: "Sonde ou opérateur non authentifié tentant d'accéder à la zone d'administration",
+      req,
+      usersMap,
+      event
+    });
+  } else if (url.pathname === '/map_data.js' || url.pathname.endsWith('/map_data.js')) {
+    sendSecurityThreatAlert({
+      type: 'DATA_EXTRACTION_ATTEMPT',
+      user: null,
+      route: url.pathname,
+      reason: "Sonde ou utilisateur non authentifié tentant de télécharger map_data.js",
+      req,
+      usersMap,
+      event
+    });
+  }
+
   return new Response(render401Page(), {
     status: 401,
     headers: {
@@ -1286,6 +1549,7 @@ function renderAdminDashboard(adminUser, usersMap) {
   const discordConfigured = Boolean(webhooks.discord);
   const telegramConfigured = Boolean(webhooks.teleToken && webhooks.teleChat);
   const totalSessions = ACCESS_LOGS.length;
+  const totalThreats = ACCESS_LOGS.filter(l => Boolean(l && l.threatAlert)).length;
   const safeAdminUpper = escapeHtmlServer(String(adminUser || '').toUpperCase());
 
   let initialLogsHtml = '';
@@ -1299,13 +1563,30 @@ function renderAdminDashboard(adminUser, usersMap) {
       const rawCountry = l.country ? String(l.country) : 'XX';
       const safeCountry = escapeHtmlServer(rawCountry);
       const flag = rawCountry !== 'XX' ? ' [' + safeCountry + ']' : '';
+      const isThreat = Boolean(l && l.threatAlert);
       const isAdmin = Boolean(l && typeof l.user === 'string' && isUserAdmin(l.user, usersMap));
-      const roleSub = isAdmin ? '👑 NIVEAU 1 // ROOT' : '🛡️ NIVEAU 2 // OPÉRATEUR';
       const safeUser = escapeHtmlServer(l.user || 'ANONYME');
-      const userTag = (isAdmin ? '&#128081; ' : '&#128737;&#65039; ') + safeUser;
       const safeIp = escapeHtmlServer(l.ip || 'Direct');
       const safeCity = l.city && l.city !== 'Unknown' ? escapeHtmlServer(l.city) + ', ' : '';
       const safeUa = escapeHtmlServer(l.userAgent || 'N/A');
+
+      if (isThreat) {
+        const threatTitle = l.alertType === 'ADMIN_BREACH_ATTEMPT' ? '🚨 INTRUSION ROOT / ADMIN' : '🚨 EXTRACTION DONNÉES';
+        const threatReason = escapeHtmlServer(l.reason || 'Menace de sécurité interceptée');
+        const threatRoute = escapeHtmlServer(l.route || '');
+        return '<tr style="background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444;">' +
+          '<td><strong>' + dateStr + '</strong><br><span style="font-size:10px;color:#fca5a5;">' + safeTs + '</span></td>' +
+          '<td><span class="badge-user badge-threat">' + threatTitle + '</span><br>' +
+              '<span style="font-size:11px;font-weight:bold;color:#fca5a5;">' + safeUser + '</span><br>' +
+              '<span style="font-size:10px;color:#f87171;">⚠️ ' + threatReason + ' (' + threatRoute + ')</span></td>' +
+          '<td><code style="color:#ef4444;font-weight:bold;">' + safeIp + '</code></td>' +
+          '<td>' + safeCity + safeCountry + flag + '</td>' +
+          '<td style="font-size:11px;color:#fca5a5;max-width:300px;word-break:break-all;">' + safeUa + '</td>' +
+        '</tr>';
+      }
+
+      const roleSub = isAdmin ? '👑 NIVEAU 1 // ROOT' : '🛡️ NIVEAU 2 // OPÉRATEUR';
+      const userTag = (isAdmin ? '&#128081; ' : '&#128737;&#65039; ') + safeUser;
       return '<tr>' +
         '<td><strong>' + dateStr + '</strong><br><span style="font-size:10px;color:#64748b;">' + safeTs + '</span></td>' +
         '<td><span class="badge-user ' + (isAdmin ? 'badge-admin' : '') + '">' + userTag + '</span><br><span style="font-size:10px;font-weight:bold;color:' + (isAdmin ? '#fca5a5' : '#86efac') + ';">' + roleSub + '</span></td>' +
@@ -1427,6 +1708,12 @@ function renderAdminDashboard(adminUser, usersMap) {
       border-color: #ef4444;
       color: #fca5a5;
     }
+    .badge-threat {
+      background: rgba(239, 68, 68, 0.35) !important;
+      border: 1px solid #ef4444 !important;
+      color: #fee2e2 !important;
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.4);
+    }
     .badge-status {
       display: inline-flex;
       align-items: center;
@@ -1481,6 +1768,10 @@ function renderAdminDashboard(adminUser, usersMap) {
       <div class="stat-card blue">
         <div class="stat-label">Sessions Enregistrées</div>
         <div class="stat-val" id="total-sessions-count">${totalSessions} SESSIONS</div>
+      </div>
+      <div class="stat-card red" style="border-left-color: #ef4444;">
+        <div class="stat-label">Menaces Interceptées</div>
+        <div class="stat-val" id="total-threats-count" style="color: #ef4444;">${totalThreats} ALERTES</div>
       </div>
       <div class="stat-card red">
         <div class="stat-label">Alerte Discord</div>
@@ -1679,6 +1970,11 @@ function renderAdminDashboard(adminUser, usersMap) {
         }
 
         if (counter) counter.textContent = logs.length + " SESSIONS";
+        var threatsCounter = document.getElementById("total-threats-count");
+        if (threatsCounter) {
+          var threatCount = logs.filter(function(x) { return Boolean(x && x.threatAlert); }).length;
+          threatsCounter.textContent = threatCount + " ALERTES";
+        }
 
         if (tbody) {
           while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
@@ -1690,10 +1986,14 @@ function renderAdminDashboard(adminUser, usersMap) {
             var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
             var countryStr = l.country ? String(l.country) : "XX";
             var flag = countryStr !== "XX" ? " [" + countryStr + "]" : "";
+            var isThreat = Boolean(l && l.threatAlert);
             var isAdmin = Boolean(l && typeof l.user === "string" && authorizedAdminSet.has(l.user));
             var roleSub = isAdmin ? "👑 NIVEAU 1 // ROOT" : "🛡️ NIVEAU 2 // OPÉRATEUR";
 
             var tr = document.createElement("tr");
+            if (isThreat) {
+              tr.style.cssText = "background: rgba(239, 68, 68, 0.12); border-left: 3px solid #ef4444;";
+            }
 
             // Col 1: Timestamp
             var tdTime = document.createElement("td");
@@ -1701,31 +2001,50 @@ function renderAdminDashboard(adminUser, usersMap) {
             strongDate.textContent = dateStr;
             var brTime = document.createElement("br");
             var spanIso = document.createElement("span");
-            spanIso.style.cssText = "font-size:10px;color:#64748b;";
+            spanIso.style.cssText = isThreat ? "font-size:10px;color:#fca5a5;" : "font-size:10px;color:#64748b;";
             spanIso.textContent = String(l.timestamp || "");
             tdTime.appendChild(strongDate);
             tdTime.appendChild(brTime);
             tdTime.appendChild(spanIso);
             tr.appendChild(tdTime);
 
-            // Col 2: Operator & Role
+            // Col 2: Operator & Role / Threat
             var tdUser = document.createElement("td");
             var spanBadge = document.createElement("span");
-            spanBadge.className = "badge-user" + (isAdmin ? " badge-admin" : "");
-            spanBadge.textContent = (isAdmin ? "👑 " : "🛡️ ") + String(l.user || "ANONYME");
-            var brUser = document.createElement("br");
-            var spanRole = document.createElement("span");
-            spanRole.style.cssText = "font-size:10px;font-weight:bold;color:" + (isAdmin ? "#fca5a5" : "#86efac") + ";";
-            spanRole.textContent = roleSub;
-            tdUser.appendChild(spanBadge);
-            tdUser.appendChild(brUser);
-            tdUser.appendChild(spanRole);
+            if (isThreat) {
+              spanBadge.className = "badge-user badge-threat";
+              spanBadge.textContent = l.alertType === "ADMIN_BREACH_ATTEMPT" ? "🚨 INTRUSION ROOT / ADMIN" : "🚨 EXTRACTION DONNÉES";
+              var brUser1 = document.createElement("br");
+              var spanTargetUser = document.createElement("span");
+              spanTargetUser.style.cssText = "font-size:11px;font-weight:bold;color:#fca5a5;";
+              spanTargetUser.textContent = String(l.user || "ANONYME");
+              var brUser2 = document.createElement("br");
+              var spanThreatReason = document.createElement("span");
+              spanThreatReason.style.cssText = "font-size:10px;color:#f87171;";
+              spanThreatReason.textContent = "⚠️ " + String(l.reason || "Menace interceptée") + (l.route ? " (" + String(l.route) + ")" : "");
+              tdUser.appendChild(spanBadge);
+              tdUser.appendChild(brUser1);
+              tdUser.appendChild(spanTargetUser);
+              tdUser.appendChild(brUser2);
+              tdUser.appendChild(spanThreatReason);
+            } else {
+              spanBadge.className = "badge-user" + (isAdmin ? " badge-admin" : "");
+              spanBadge.textContent = (isAdmin ? "👑 " : "🛡️ ") + String(l.user || "ANONYME");
+              var brUser = document.createElement("br");
+              var spanRole = document.createElement("span");
+              spanRole.style.cssText = "font-size:10px;font-weight:bold;color:" + (isAdmin ? "#fca5a5" : "#86efac") + ";";
+              spanRole.textContent = roleSub;
+              tdUser.appendChild(spanBadge);
+              tdUser.appendChild(brUser);
+              tdUser.appendChild(spanRole);
+            }
             tr.appendChild(tdUser);
 
             // Col 3: IP
             var tdIp = document.createElement("td");
             var codeIp = document.createElement("code");
-            codeIp.style.color = "#38bdf8";
+            codeIp.style.color = isThreat ? "#ef4444" : "#38bdf8";
+            if (isThreat) codeIp.style.fontWeight = "bold";
             codeIp.textContent = String(l.ip || "Direct");
             tdIp.appendChild(codeIp);
             tr.appendChild(tdIp);

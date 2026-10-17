@@ -3127,6 +3127,67 @@
         // Initialize UI at 0 degrees
         updateCompassUI(0);
 
+        // -----------------------------------------------------------------
+        // ANTI-SCRAPING & DATA EXTRACTION DETECTION SENTINEL
+        // -----------------------------------------------------------------
+        (function() {
+            var alertSent = false;
+            function sendExtractionAlert(reason) {
+                if (alertSent) return;
+                alertSent = true;
+                try {
+                    if (navigator.sendBeacon) {
+                        navigator.sendBeacon('/api/security/alert', JSON.stringify({ reason: reason }));
+                    } else {
+                        fetch('/api/security/alert', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ reason: reason }),
+                            keepalive: true
+                        }).catch(function() {});
+                    }
+                } catch(e) {}
+                setTimeout(function() { alertSent = false; }, 30000); // 30s client debounce
+            }
+
+            // Keyboard shortcuts protection (view source, save page)
+            window.addEventListener('keydown', function(e) {
+                if ((e.ctrlKey || e.metaKey) && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S')) {
+                    e.preventDefault();
+                    sendExtractionAlert("Tentative de raccourci clavier d'inspection/sauvegarde (" + (e.ctrlKey ? 'Ctrl+' : 'Cmd+') + e.key.toUpperCase() + ")");
+                }
+            }, { capture: true });
+
+            // Trap accesses to global raw datasets from developer console
+            ['moroccoData', 'algeriaData', 'spainData', 'mauritaniaData'].forEach(function(datasetName) {
+                if (window[datasetName]) {
+                    var rawVal = window[datasetName];
+                    Object.defineProperty(window, datasetName, {
+                        configurable: true,
+                        enumerable: true,
+                        get: function() {
+                            var stack = (new Error()).stack || '';
+                            // If accessed directly from browser DevTools console or eval
+                            if (stack.includes('<anonymous>') || stack.includes('eval at') || stack.includes('console')) {
+                                sendExtractionAlert("Tentative d'extraction de données cartographiques brutes (" + datasetName + ") depuis la console du navigateur");
+                            }
+                            return rawVal;
+                        },
+                        set: function(v) {
+                            rawVal = v;
+                        }
+                    });
+                }
+            });
+
+            // Console security warning
+            console.log(
+                "%c[GEOINT SENTINEL // CLASSIFIED AIR-LAND DATASET]\n%cToute tentative d'extraction, copie ou aspiration non autorisée des données cartographiques est interceptée, tracée avec votre identifiant, adresse IP et géolocalisation, et transmise en temps réel au Commandement.",
+                "color: #ef4444; font-weight: bold; font-size: 14px;",
+                "color: #38bdf8; font-size: 11px;"
+            );
+        })();
+
 </script>
 </body>
 </html>
