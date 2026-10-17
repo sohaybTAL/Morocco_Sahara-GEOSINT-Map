@@ -13,7 +13,7 @@
         #map { position: absolute; top: 0; bottom: 0; right: 0; left: 350px; transition: left 0.3s ease; }
         #map.expanded { left: 0; }
         
-        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(15, 28, 15, 0.95); border-right: 2px solid #333; z-index: 1000; padding: 20px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); transition: transform 0.3s ease; }
+        #sidebar { position: absolute; top: 0; bottom: 0; left: 0; width: 350px; background: rgba(15, 28, 15, 0.95); border-right: 2px solid #333; z-index: 1000; padding: 16px; box-sizing: border-box; overflow-y: auto; backdrop-filter: blur(5px); transition: transform 0.3s ease; }
         #sidebar.collapsed { transform: translateX(-350px); }
 
         /* Tactical Scrollbar on Sidebar */
@@ -108,8 +108,8 @@
             box-shadow: 0 0 8px #0f0;
         }
 
-        h1 { font-size: 18px; color: #fff; text-transform: uppercase; border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 0; }
-        h2 { font-size: 14px; color: #aaa; margin-top: 20px; text-transform: uppercase; border-bottom: 1px solid #222; padding-bottom: 5px; }
+        h1 { font-size: 19px; color: #fff; text-transform: uppercase; margin: 0; padding: 0; }
+        h2 { font-size: 14px; color: #00ff66; margin-top: 15px; margin-bottom: 7px; text-transform: uppercase; border-bottom: 1px solid #1a331a; padding-bottom: 4px; letter-spacing: 1px; }
         .stat-box { background: rgba(25, 45, 25, 0.8); padding: 10px; margin-bottom: 10px; border: 1px solid #444; border-left: 4px solid #0f0; }
         .stat-box.alg { border-left-color: #f00; color: #ff5555; }
         .stat-box.mor { border-left-color: #0f0; color: #55ff55; }
@@ -189,29 +189,152 @@
         }
         @keyframes blink { 50% { opacity: 0; } }
 
-        @keyframes sonar-ping {
-            0% { transform: scale(0.2); opacity: 1; }
-            100% { transform: scale(2.5); opacity: 0; }
-        }
-        .custom-target-anim {
+        /* TACTICAL MULTI-RING PULSE RETICLE */
+        .tactical-pulse-container {
             pointer-events: none;
         }
+        .pulse-target-wrapper {
+            position: relative;
+            width: 0;
+            height: 0;
+            pointer-events: none;
+        }
+        .pulse-ring {
+            position: absolute;
+            top: -45px;
+            left: -45px;
+            width: 90px;
+            height: 90px;
+            border-radius: 50%;
+            border: 2px solid #00ff66;
+            box-shadow: 0 0 15px #00ff66, inset 0 0 10px rgba(0, 255, 102, 0.4);
+            opacity: 0;
+            pointer-events: none;
+        }
+        .pulse-ring.ring-1 {
+            animation: tactical-sonar-pulse 2s infinite cubic-bezier(0.1, 0.7, 0.1, 1);
+        }
+        .pulse-ring.ring-2 {
+            animation: tactical-sonar-pulse 2s infinite cubic-bezier(0.1, 0.7, 0.1, 1) 0.65s;
+        }
+        .pulse-ring.ring-3 {
+            animation: tactical-sonar-pulse 2s infinite cubic-bezier(0.1, 0.7, 0.1, 1) 1.3s;
+        }
+        @keyframes tactical-sonar-pulse {
+            0% {
+                transform: scale(0.15);
+                opacity: 0.95;
+                border-color: #00ff66;
+            }
+            50% {
+                opacity: 0.7;
+            }
+            100% {
+                transform: scale(2.8);
+                opacity: 0;
+                border-color: #00ffff;
+            }
+        }
+        .pulse-reticle {
+            position: absolute;
+            top: -24px;
+            left: -24px;
+            width: 48px;
+            height: 48px;
+            animation: reticle-rotate 8s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes reticle-rotate {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .pulse-center-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: #00ff66;
+            border-radius: 50%;
+            box-shadow: 0 0 12px #00ff66, 0 0 22px #00ff66;
+        }
+        .pulse-crosshair-h {
+            position: absolute;
+            top: 50%;
+            left: -12px;
+            width: 72px;
+            height: 1.5px;
+            background: rgba(0, 255, 102, 0.85);
+            box-shadow: 0 0 6px #00ff66;
+            transform: translateY(-50%);
+        }
+        .pulse-crosshair-v {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            width: 1.5px;
+            height: 72px;
+            background: rgba(0, 255, 102, 0.85);
+            box-shadow: 0 0 6px #00ff66;
+            transform: translateX(-50%);
+        }
+        .pulse-corner {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            border-color: #00ff66;
+            border-style: solid;
+        }
+        .pulse-corner.tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
+        .pulse-corner.tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
+        .pulse-corner.bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
+        .pulse-corner.br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+        /* Legacy compatibility */
+        .custom-target-anim { pointer-events: none; }
         .target-ring {
             position: absolute;
             width: 50px; height: 50px;
             border: 2px solid #0f0;
             border-radius: 70%;
             top: -25px; left: -25px;
-            animation: sonar-ping 1.2s infinite cubic-bezier(0, 0, 0.2, 1);
+            animation: tactical-sonar-pulse 1.4s infinite cubic-bezier(0, 0, 0.2, 1);
         }
-        .target-center {
-            position: absolute;
-            width: 12px; height: 12px;
-            background: #0f0;
-            border-radius: 70%;
-            top: -6px; left: -6px;
-            box-shadow: 0 0 10px #0f0;
+
+        /* WATCHLIST HUD STYLING */
+        .watchlist-card {
+            background: rgba(5, 15, 8, 0.75);
+            border: 1px solid rgba(0, 255, 0, 0.3);
+            border-radius: 3px;
+            padding: 7px 8px;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
         }
+        .watchlist-card:hover {
+            border-color: #0f0;
+            background: rgba(0, 30, 10, 0.9);
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.25);
+            transform: translateX(2px);
+        }
+        .watchlist-card.active {
+            border-color: #00ffff;
+            box-shadow: 0 0 12px rgba(0, 255, 255, 0.35);
+        }
+        .watchlist-tag {
+            font-size: 8.5px;
+            font-weight: bold;
+            padding: 1px 4px;
+            border-radius: 2px;
+            letter-spacing: 0.5px;
+            display: inline-block;
+        }
+        .tag-mor { background: rgba(0, 255, 0, 0.2); color: #00ff66; border: 1px solid #00ff66; }
+        .tag-alg { background: rgba(255, 0, 0, 0.2); color: #ff4d4d; border: 1px solid #ff4d4d; }
+        .tag-esp { background: rgba(255, 0, 255, 0.2); color: #ff66ff; border: 1px solid #ff66ff; }
+        .tag-custom { background: rgba(0, 255, 255, 0.2); color: #00ffff; border: 1px solid #00ffff; }
 
         /* HARDWARE DOSSIER PANEL */
         #dossier-panel {
@@ -623,50 +746,72 @@
 
     <div id="sidebar">
         
-          <div style="text-align: center; margin-bottom: 10px;">
-              <img src="logo.png" alt="GeoINT Logo" style="width: 80px; height: 80px; border: none; background: transparent; filter: drop-shadow(0 0 10px rgba(0,255,31,0.6));">
-          </div>
-<h1 style='text-align: center;'>[Top Secret] GeoINT</h1>
+        <!-- TOP MILITARY BRAND & LANG BAR -->
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid #1a3a1a;">
+            <div style="display: flex; align-items: baseline; gap: 8px;">
+                <span style="font-size: 11px; color: #ff4444; letter-spacing: 2px; font-weight: bold;">[TOP SECRET]</span>
+                <h1 style="font-size: 18px; color: #fff; margin: 0; padding: 0; border: none; font-weight: bold; letter-spacing: 2px; display: inline;">GeoINT</h1>
+            </div>
+            <div style="display: flex; gap: 4px;">
+                <button onclick="toggleLanguage('en')" id="btn-en" style="background: #0f0; color: #000; border: 1px solid #0f0; padding: 3px 10px; font-weight: bold; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; border-radius: 2px; transition: 0.2s;">EN</button>
+                <button onclick="toggleLanguage('fr')" id="btn-fr" style="background: #000; color: #0f0; border: 1px solid #0f0; padding: 3px 10px; font-family: 'Courier New', monospace; font-size: 11px; cursor: pointer; border-radius: 2px; transition: 0.2s;">FR</button>
+            </div>
+        </div>
 
-          <div style="text-align: center; margin-top: 10px; margin-bottom: 20px;">
-              <button onclick="toggleLanguage('en')" id="btn-en" style="background: #0f0; color: #000; border: 1px solid #0f0; padding: 2px 8px; font-weight: bold; font-family: 'Courier New'; cursor: pointer;">EN</button>
-              <button onclick="toggleLanguage('fr')" id="btn-fr" style="background: #000; color: #0f0; border: 1px solid #0f0; padding: 2px 8px; font-family: 'Courier New'; cursor: pointer;">FR</button>
-          </div>
+        <!-- SIDE BY SIDE: 50% LOGO BOX & 50% AUTHOR BOX -->
+        <div style="display: flex; align-items: stretch; gap: 10px; margin-bottom: 12px;">
+            <!-- 50% Logo Box -->
+            <div style="flex: 1 1 0; min-width: 0; background: rgba(0, 20, 5, 0.45); border: 1px solid #1a4a1a; border-radius: 4px; display: flex; align-items: center; justify-content: center; padding: 4px; min-height: 82px;">
+                <img src="logo.png" alt="GeoINT Logo" style="width: 80px; height: 80px; filter: drop-shadow(0 0 12px rgba(0,255,31,0.7)); object-fit: contain;">
+            </div>
 
-        <div style="margin-bottom: 20px; border-bottom: 1px dashed #333; padding-bottom: 15px; font-size: 14px; color: #ffffff; text-align: center; letter-spacing: 2px; line-height: 1.5;">
-            [ SYSTEM ARCHITECT ]<br>
-            <div style="margin: 6px 0;">
-                <a href="https://x.com/ElMakhchouniX" target="_blank" rel="noopener noreferrer" style="color: #0f0; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 8px; transition: 0.2s;" onmouseover="this.style.textShadow='0 0 8px #0f0'" onmouseout="this.style.textShadow='none'">
-                    <img src="avatar.jpg" alt="Søhäyb" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid #0f0; object-fit: cover; vertical-align: middle; box-shadow: 0 0 5px rgba(0,255,0,0.5);" onerror="this.style.display='none'">
-                    <span style="font-weight: bold; font-size: 16px;">Søhäyb</span>
-                    <span style="color: #888; font-size: 12px; font-weight: normal; letter-spacing: 0;">(@ElMakhchouniX)</span>
+            <!-- 50% Author Bar -->
+            <div style="flex: 1 1 0; min-width: 0; background: rgba(0, 20, 5, 0.6); border: 1px solid #1a4a1a; border-radius: 4px; padding: 8px 10px; font-family: 'Courier New', monospace; display: flex; flex-direction: column; justify-content: space-between;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+                    <div>
+                        <div style="font-size: 9.5px; color: #00ff66; letter-spacing: 1px; font-weight: bold; line-height: 1.15;">SYSTEM</div>
+                        <div style="font-size: 9.5px; color: #00ff66; letter-spacing: 1px; font-weight: bold; line-height: 1.15;">ARCHITECT</div>
+                    </div>
+                    <div style="text-align: right;">
+                        <div style="font-size: 9px; color: #64748b; letter-spacing: 0.8px; font-weight: bold; line-height: 1.15;">SAHARA</div>
+                        <div style="font-size: 9px; color: #64748b; letter-spacing: 0.8px; font-weight: bold; line-height: 1.15;">GEOINT</div>
+                    </div>
+                </div>
+                <a href="https://x.com/ElMakhchouniX" target="_blank" rel="noopener noreferrer" style="color: #0f0; text-decoration: none; display: flex; align-items: center; gap: 8px; margin-top: 6px; transition: 0.2s;" onmouseover="this.style.textShadow='0 0 8px #0f0'" onmouseout="this.style.textShadow='none'">
+                    <img src="avatar.jpg" alt="Søhäyb" style="width: 28px; height: 28px; border-radius: 50%; border: 1px solid #0f0; object-fit: cover; flex-shrink: 0;" onerror="this.style.display='none'">
+                    <div style="min-width: 0; overflow: hidden;">
+                        <div style="font-weight: bold; color: #fff; font-size: 13px; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Søhäyb</div>
+                        <div style="color: #64748b; font-size: 10.5px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">@ElMakhchouniX</div>
+                    </div>
                 </a>
             </div>
-            <span style="font-size: 12px;">MOROCCO SAHARA GEOINT</span>
         </div>
 
         <!-- ACTIVE OPERATOR IDENTIFIER BADGE -->
-        <div id="operator-badge-box" style="margin-bottom: 20px; background: rgba(0, 25, 0, 0.6); border: 1px solid #1a551a; border-radius: 4px; padding: 10px 12px; font-family: 'Courier New', monospace; font-size: 11px; transition: all 0.3s ease;">
+        <div id="operator-badge-box" style="margin-bottom: 14px; background: rgba(0, 25, 0, 0.65); border: 1px solid #1a551a; border-radius: 4px; padding: 10px 14px; font-family: 'Courier New', monospace; transition: all 0.3s ease;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <span id="operator-role-label" style="color: #64748b; font-size: 10px; letter-spacing: 1.5px;">ACTIVE OPERATOR</span>
-                <span id="operator-clearance" style="background: rgba(0, 255, 0, 0.15); color: #0f0; border: 1px solid #0f0; padding: 1px 6px; border-radius: 2px; font-size: 9px; font-weight: bold; letter-spacing: 1px;">VERIFIED</span>
+                <span id="operator-role-label" style="color: #64748b; font-size: 11px; letter-spacing: 1.5px; font-weight: bold;">ACTIVE OPERATOR</span>
+                <span id="operator-clearance" style="background: rgba(0, 255, 0, 0.15); color: #0f0; border: 1px solid #0f0; padding: 2px 8px; border-radius: 2px; font-size: 10.5px; font-weight: bold; letter-spacing: 1px;">VERIFIED</span>
             </div>
             <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div style="font-weight: bold; font-size: 13px; letter-spacing: 1px; display: flex; align-items: center; gap: 6px;">
-                    <span id="operator-beacon-dot" style="display: inline-block; width: 7px; height: 7px; background: #0f0; border-radius: 50%; box-shadow: 0 0 6px #0f0;"></span>
-                    <span id="operator-callsign" style="color: #0f0;">AUTH_VERIFIED</span>
+                <div style="color: #0f0; font-weight: bold; font-size: 14.5px; letter-spacing: 1px; display: flex; align-items: center; gap: 8px;">
+                    <span id="operator-beacon-dot" style="display: inline-block; width: 8px; height: 8px; background: #0f0; border-radius: 50%; box-shadow: 0 0 6px #0f0;"></span>
+                    <span id="operator-callsign">AUTH_VERIFIED</span>
                 </div>
-                <span id="operator-loc" style="color: #64748b; font-size: 10px;"></span>
+                <span id="operator-loc" style="color: #64748b; font-size: 11px;"></span>
             </div>
-            <div id="operator-level-sub" style="font-size: 9px; color: #475569; margin-top: 5px; letter-spacing: 1px;">LEVEL 02 // TACTICAL SURVEILLANCE</div>
-            <a href="/admin" id="admin-panel-link" style="display: none; margin-top: 10px; text-align: center; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 8px; border-radius: 3px; font-size: 11px; font-weight: bold; text-decoration: none; transition: 0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.4)';this.style.boxShadow='0 0 10px rgba(239,68,68,0.4)'" onmouseout="this.style.background='rgba(239,68,68,0.2)';this.style.boxShadow='none'">
+            <div id="operator-level-sub" style="font-size: 10.5px; color: #475569; margin-top: 6px; letter-spacing: 0.5px; display: flex; justify-content: space-between;">
+                <span>OPERATOR LEVEL 02</span>
+                <span>TACTICAL SURVEILLANCE</span>
+            </div>
+            <a href="/admin" id="admin-panel-link" style="display: none; margin-top: 8px; text-align: center; background: rgba(239, 68, 68, 0.2); border: 1px solid #ef4444; color: #fca5a5; padding: 6px 10px; border-radius: 3px; font-size: 11.5px; font-weight: bold; text-decoration: none; transition: 0.2s;">
                 [ 👑 CONSOLE D&#39;AUDIT &amp; SÉCURITÉ (/admin) ]
             </a>
         </div>
         
-                <h2>Satellite Feed</h2>
-        <div class="control-group" style="padding-bottom: 15px;">
-            <select id="sat-provider" style="width: 100%; background: #111; color: #0f0; border: 1px solid #333; padding: 5px; font-family: 'Courier New', monospace; font-weight: bold; cursor: pointer; outline: none;">
+        <h2>Satellite Feed</h2>
+        <div class="control-group" style="padding-bottom: 8px; margin-top: 4px;">
+            <select id="sat-provider" style="width: 100%; background: #111; color: #0f0; border: 1px solid #333; padding: 7px 8px; font-family: 'Courier New', monospace; font-size: 12.5px; font-weight: bold; cursor: pointer; outline: none;">
                 <option value="esri">ESRI SATELLITE (DEFAULT)</option>
                 <option value="google">GOOGLE SATELLITE</option>
                 <option value="apple">APPLE SATELLITE</option>
@@ -675,16 +820,38 @@
             </select>
         </div>
         
-        
         <h2>Command Terminal</h2>
-        <div style="position: relative; margin-bottom: 15px;">
-            <div style="background: #000; border: 1px solid #0f0; padding: 5px; font-family: 'Courier New', monospace; position: relative; box-shadow: 0 0 5px #0f0;">
-                <span style="color: #0f0; position: absolute; left: 8px; top: 7px;">></span>
-                <input type="text" id="cmd-terminal" placeholder="Search Asset or Paste GPS..." style="width: 100%; background: transparent; color: #0f0; border: none; outline: none; padding-left: 15px; font-family: 'Courier New', monospace; font-size: 11px;" onkeyup="handleTerminalSuggest(event)" onkeypress="handleTerminal(event)">
+        <div style="position: relative; margin-bottom: 10px;">
+            <div style="background: #000; border: 1px solid #0f0; padding: 7px 8px; font-family: 'Courier New', monospace; position: relative; box-shadow: 0 0 5px #0f0;">
+                <span style="color: #0f0; position: absolute; left: 8px; top: 8px;">></span>
+                <input type="text" id="cmd-terminal" placeholder="Search Asset or Paste GPS..." style="width: 100%; background: transparent; color: #0f0; border: none; outline: none; padding-left: 18px; font-family: 'Courier New', monospace; font-size: 12.5px;" onkeyup="handleTerminalSuggest(event)" onkeypress="handleTerminal(event)">
             </div>
-            <div id="cmd-suggestions" style="position: absolute; top: 32px; left: 0; width: 100%; background: #000; border: 1px solid #0f0; border-top: none; max-height: 250px; overflow-y: auto; z-index: 10000; display: none; font-family: 'Courier New', monospace; font-size: 11px;"></div>
+            <div id="cmd-suggestions" style="position: absolute; top: 38px; left: 0; width: 100%; background: #000; border: 1px solid #0f0; border-top: none; max-height: 250px; overflow-y: auto; z-index: 10000; display: none; font-family: 'Courier New', monospace; font-size: 12.5px;"></div>
         </div>
         
+        <!-- WATCHLIST & BOOKMARKS SECTION -->
+        <div id="watchlist-section" style="margin-bottom: 12px; border-bottom: 1px dashed #224422; padding-bottom: 8px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                <h2 style="margin: 0; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                    <span style="color: #00ff66;">★</span>
+                    <span id="watchlist-title-text">WATCHLIST &amp; BOOKMARKS</span>
+                </h2>
+                <span id="watchlist-count-badge" style="background: rgba(0, 255, 0, 0.2); color: #0f0; border: 1px solid #0f0; padding: 1px 6px; border-radius: 10px; font-size: 10px; font-weight: bold; font-family: 'Courier New', monospace;">0</span>
+            </div>
+            
+            <div style="display: flex; gap: 6px; margin-bottom: 10px;">
+                <button type="button" class="tactical-btn" onclick="pinCurrentMapCenter()" style="flex: 1; padding: 5px 6px; font-size: 10px; text-align: center;" title="Épingler le centre actuel de la carte">
+                    + PIN MAP CENTER
+                </button>
+                <button type="button" class="tactical-btn" onclick="clearAllWatchlist()" style="padding: 5px 8px; font-size: 10px; text-align: center; color: #ff6666; border-color: #662222;" title="Vider toute la Watchlist">
+                    🗑 VIDER
+                </button>
+            </div>
+
+            <div id="watchlist-items" style="display: flex; flex-direction: column; gap: 6px; max-height: 280px; overflow-y: auto; padding-right: 2px;">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
         
         <h2>TACTICAL TOOLS & FEEDS</h2>
         <div style="display:flex; gap:5px; margin-bottom:10px;">
@@ -761,7 +928,11 @@
         <div style="font-size: 11px; color: #ddd; margin-top: 5px; padding: 5px; background: #222; border-left: 2px solid #0f0;" id="d_intel">
             ...
         </div>
-        
+        <div style="margin-top: 12px;">
+            <button id="dossier-pin-btn" class="tactical-btn" onclick="pinDossierAsset()" style="width: 100%; font-size: 10px; padding: 6px; text-align: center; color: #00ffff; border-color: #00ffff;">
+                ★ ÉPINGLER DANS LA WATCHLIST
+            </button>
+        </div>
     </div>
 
     <div id="map"></div>
@@ -878,6 +1049,15 @@
         const map = L.map('map', { rotate: true, bearing: 0, touchRotate: true, shiftKeyRotate: true, zoomControl: false, preferCanvas: true, minZoom: 3, maxBounds: [[-90, -180], [90, 180]], maxBoundsViscosity: 1.0 }).setView([28.0, -5.0], 6);
         window.map = map;
 
+        function escapeHtml(str) {
+            return String(str == null ? '' : str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
         let activeSelectionMarker = null;
         function setTargetLock(lat, lng, color = '#0f0') {
             const numLat = Number(lat);
@@ -894,7 +1074,421 @@
             });
             activeSelectionMarker = L.marker([numLat, numLng], {icon: icon, zIndexOffset: 10000}).addTo(map);
         }
+
+        // --- TACTICAL MULTI-RING PULSE RETICLE ENGINE ---
+        let targetPulseMarker = null;
+
+        function clearTargetPulseLock() {
+            if (targetPulseMarker) {
+                map.removeLayer(targetPulseMarker);
+                targetPulseMarker = null;
+            }
+        }
+
+        function setTargetPulseLock(lat, lng, name = 'CIBLE TACTIQUE', autoPopup = true) {
+            const numLat = Number(lat);
+            const numLng = Number(lng);
+            if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) return;
+
+            clearTargetPulseLock();
+
+            const pulseHtml = `
+                <div class="tactical-pulse-container">
+                    <div class="pulse-target-wrapper">
+                        <div class="pulse-ring ring-1"></div>
+                        <div class="pulse-ring ring-2"></div>
+                        <div class="pulse-ring ring-3"></div>
+                        <div class="pulse-reticle">
+                            <div class="pulse-corner tl"></div>
+                            <div class="pulse-corner tr"></div>
+                            <div class="pulse-corner bl"></div>
+                            <div class="pulse-corner br"></div>
+                            <div class="pulse-crosshair-h"></div>
+                            <div class="pulse-crosshair-v"></div>
+                            <div class="pulse-center-dot"></div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            const icon = L.divIcon({
+                className: 'tactical-pulse-icon',
+                html: pulseHtml,
+                iconSize: [0, 0],
+                iconAnchor: [0, 0]
+            });
+
+            targetPulseMarker = L.marker([numLat, numLng], { icon: icon, zIndexOffset: 12000 }).addTo(map);
+
+            const coordStr = `${numLat.toFixed(5)}, ${numLng.toFixed(5)}`;
+            const rawTargetName = String(name || 'CIBLE TACTIQUE');
+
+            const popupRoot = document.createElement('div');
+            popupRoot.style.cssText = "font-family:'Courier New', monospace; min-width: 210px; color:#0f0; background:rgba(0,12,0,0.96); border:1px solid #00ff66; padding:10px; border-radius:3px; box-shadow:0 0 15px rgba(0,255,102,0.4);";
+
+            const headerRow = document.createElement('div');
+            headerRow.style.cssText = 'display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #00ff66; padding-bottom:4px; margin-bottom:6px;';
+            const lockLabel = document.createElement('span');
+            lockLabel.style.cssText = 'font-size:10px; letter-spacing:1px; color:#00ffff; font-weight:bold;';
+            lockLabel.textContent = '◈ TARGET LOCK';
+            const acqBadge = document.createElement('span');
+            acqBadge.style.cssText = 'font-size:9px; background:#003311; color:#00ff66; padding:1px 4px; border:1px solid #00ff66;';
+            acqBadge.textContent = 'ACQUIRED';
+            headerRow.appendChild(lockLabel);
+            headerRow.appendChild(acqBadge);
+            popupRoot.appendChild(headerRow);
+
+            const nameDiv = document.createElement('div');
+            nameDiv.style.cssText = 'font-size:12px; font-weight:bold; color:#fff; margin-bottom:4px; text-transform:uppercase;';
+            nameDiv.textContent = rawTargetName;
+            popupRoot.appendChild(nameDiv);
+
+            const gpsDiv = document.createElement('div');
+            gpsDiv.style.cssText = 'font-size:10px; color:#00ff66; margin-bottom:8px; letter-spacing:0.5px;';
+            gpsDiv.textContent = `GPS: ${coordStr}`;
+            popupRoot.appendChild(gpsDiv);
+
+            const btnCol = document.createElement('div');
+            btnCol.style.cssText = 'display:flex; flex-direction:column; gap:5px;';
+
+            const btnAddWl = document.createElement('button');
+            btnAddWl.type = 'button';
+            btnAddWl.style.cssText = "background:rgba(0,255,102,0.15); color:#00ff66; border:1px solid #00ff66; padding:4px 6px; font-size:10px; font-family:'Courier New'; cursor:pointer; font-weight:bold; text-align:center;";
+            btnAddWl.textContent = '★ AJOUTER À LA WATCHLIST';
+            btnAddWl.addEventListener('click', () => {
+                addCoordToWatchlist(rawTargetName, numLat, numLng);
+            });
+            btnCol.appendChild(btnAddWl);
+
+            const btnThreat = document.createElement('button');
+            btnThreat.type = 'button';
+            btnThreat.style.cssText = "background:rgba(255,0,0,0.15); color:#ff4d4d; border:1px solid #ff4d4d; padding:4px 6px; font-size:10px; font-family:'Courier New'; cursor:pointer; font-weight:bold; text-align:center;";
+            btnThreat.textContent = '⭕ CERCLAGE MENACE (50 KM)';
+            btnThreat.addEventListener('click', () => {
+                addThreatRingAt(numLat, numLng, 50);
+            });
+            btnCol.appendChild(btnThreat);
+
+            const btnCopy = document.createElement('button');
+            btnCopy.type = 'button';
+            btnCopy.style.cssText = "background:#111; color:#aaa; border:1px solid #444; padding:3px 6px; font-size:9px; font-family:'Courier New'; cursor:pointer; text-align:center;";
+            btnCopy.textContent = '📋 COPIER GPS';
+            btnCopy.addEventListener('click', () => {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(coordStr);
+                }
+                btnCopy.textContent = '✓ COPIÉ!';
+                setTimeout(() => { btnCopy.textContent = '📋 COPIER GPS'; }, 2000);
+            });
+            btnCol.appendChild(btnCopy);
+
+            popupRoot.appendChild(btnCol);
+
+            targetPulseMarker.bindPopup(popupRoot, {
+                className: 'custom-popup tactical-target-popup',
+                offset: [0, -15],
+                autoClose: false,
+                closeOnClick: false
+            });
+
+            if (autoPopup) {
+                setTimeout(() => {
+                    if (targetPulseMarker) targetPulseMarker.openPopup();
+                }, 900);
+            }
+        }
+
+        function addThreatRingAt(lat, lng, radiusKm = 50) {
+            if (typeof measureLayer === 'undefined') return;
+            const rad = Number(radiusKm) || 50;
+            const popupEl = document.createElement('div');
+            popupEl.style.cssText = 'color:#ff4444; font-family:"Courier New"; font-weight:bold; font-size:11px;';
+            popupEl.textContent = `⭕ TACTICAL THREAT RING (${rad} KM)`;
+            L.circle([lat, lng], {
+                radius: rad * 1000,
+                color: '#ff0000',
+                fillColor: '#ff0000',
+                fillOpacity: 0.12,
+                weight: 2,
+                dashArray: '8, 8'
+            }).bindPopup(popupEl).addTo(measureLayer);
+        }
+
+        // --- COORDINATES PARSER (DD, DMS, CARDINALS) ---
+        function parseCoordinates(input) {
+            if (!input || typeof input !== 'string') return null;
+            let s = input.trim();
+            if (!s) return null;
+            s = s.replace(/^[\[\(]+|[\]\)]+$/g, '').trim();
+
+            // 1. DMS pattern: e.g. 27°09'06"N 13°13'09"W or 27° 9' 6" N, 13° 13' 9" W
+            const dmsRegex = /(\d{1,3})[°\s]+(\d{1,2})['\s]+(\d{1,2}(?:\.\d+)?)["\s]*([NSEWnsew])[\s,;]+(\d{1,3})[°\s]+(\d{1,2})['\s]+(\d{1,2}(?:\.\d+)?)["\s]*([NSEWnsew])/i;
+            const dmsMatch = s.match(dmsRegex);
+            if (dmsMatch) {
+                let latDeg = parseFloat(dmsMatch[1]), latMin = parseFloat(dmsMatch[2]), latSec = parseFloat(dmsMatch[3]), latCard = dmsMatch[4].toUpperCase();
+                let lngDeg = parseFloat(dmsMatch[5]), lngMin = parseFloat(dmsMatch[6]), lngSec = parseFloat(dmsMatch[7]), lngCard = dmsMatch[8].toUpperCase();
+                
+                let lat = latDeg + (latMin / 60) + (latSec / 3600);
+                if (latCard === 'S') lat = -lat;
+                let lng = lngDeg + (lngMin / 60) + (lngSec / 3600);
+                if (lngCard === 'W') lng = -lng;
+
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    return {
+                        lat: Number(lat.toFixed(6)),
+                        lng: Number(lng.toFixed(6)),
+                        formatted: `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`
+                    };
+                }
+            }
+
+            // 2. Cardinal prefix: e.g. N27.1517 W13.2192
+            const cardDecimalRegex1 = /([NSns])\s*(\d{1,2}(?:\.\d+)?)[\s,;]+([EWew])\s*(\d{1,3}(?:\.\d+)?)/i;
+            const m1 = s.match(cardDecimalRegex1);
+            if (m1) {
+                let lat = parseFloat(m1[2]) * (m1[1].toUpperCase() === 'S' ? -1 : 1);
+                let lng = parseFloat(m1[4]) * (m1[3].toUpperCase() === 'W' ? -1 : 1);
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    return {
+                        lat: Number(lat.toFixed(6)),
+                        lng: Number(lng.toFixed(6)),
+                        formatted: `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`
+                    };
+                }
+            }
+
+            // 3. Cardinal suffix: e.g. 27.1517N, 13.2192W
+            const cardDecimalRegex2 = /(\d{1,2}(?:\.\d+)?)\s*([NSns])[\s,;]+(\d{1,3}(?:\.\d+)?)\s*([EWew])/i;
+            const m2 = s.match(cardDecimalRegex2);
+            if (m2) {
+                let lat = parseFloat(m2[1]) * (m2[2].toUpperCase() === 'S' ? -1 : 1);
+                let lng = parseFloat(m2[3]) * (m2[4].toUpperCase() === 'W' ? -1 : 1);
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    return {
+                        lat: Number(lat.toFixed(6)),
+                        lng: Number(lng.toFixed(6)),
+                        formatted: `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`
+                    };
+                }
+            }
+
+            // 4. Standard Decimal degrees: e.g. "27.1517, -13.2192" or "27.1517 -13.2192"
+            const ddRegex = /^(-?\d{1,2}(?:\.\d+)?)[\s,;]+(-?\d{1,3}(?:\.\d+)?)$/;
+            const m3 = s.match(ddRegex);
+            if (m3) {
+                let lat = parseFloat(m3[1]);
+                let lng = parseFloat(m3[2]);
+                if (Number.isFinite(lat) && Number.isFinite(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+                    return {
+                        lat: Number(lat.toFixed(6)),
+                        lng: Number(lng.toFixed(6)),
+                        formatted: `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}, ${Math.abs(lng).toFixed(4)}°${lng >= 0 ? 'E' : 'W'}`
+                    };
+                }
+            }
+
+            return null;
+        }
+
+        // --- WATCHLIST & BOOKMARKS SYSTEM ---
+        const WATCHLIST_STORAGE_KEY = 'FAR_GEOINT_WATCHLIST_V1';
+        const ALLOWED_WATCHLIST_TAGS = new Set(['tag-mor', 'tag-alg', 'tag-esp', 'tag-mau', 'tag-custom']);
+
+        function sanitizeWatchlistId(rawId, fallbackIdx = 0) {
+            const str = String(rawId || '').trim();
+            if (/^[a-zA-Z0-9_-]{1,64}$/.test(str)) return str;
+            const cleaned = str.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32);
+            return `wl-safe-${Number(fallbackIdx) || 0}-${cleaned || 'item'}`;
+        }
+
+        function sanitizeWatchlistTagClass(rawTag) {
+            const str = String(rawTag || '').trim();
+            return ALLOWED_WATCHLIST_TAGS.has(str) ? str : 'tag-custom';
+        }
+
+        function getWatchlist() {
+            try {
+                const stored = localStorage.getItem(WATCHLIST_STORAGE_KEY);
+                if (stored !== null) {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) return parsed;
+                }
+            } catch (err) {
+                console.warn('LocalStorage error reading watchlist:', err);
+            }
+            return [];
+        }
+
+        function saveWatchlist(list) {
+            try {
+                localStorage.setItem(WATCHLIST_STORAGE_KEY, JSON.stringify(list || []));
+            } catch (err) {
+                console.warn('LocalStorage error saving watchlist:', err);
+            }
+        }
+
+        function renderWatchlistUI() {
+            const list = getWatchlist();
+            const badge = document.getElementById('watchlist-count-badge');
+            if (badge) badge.textContent = String(list.length);
+
+            const container = document.getElementById('watchlist-items');
+            if (!container) return;
+            while (container.firstChild) {
+                container.removeChild(container.firstChild);
+            }
+
+            if (list.length === 0) {
+                const emptyBox = document.createElement('div');
+                emptyBox.style.cssText = 'text-align: center; padding: 16px 8px; border: 1px dashed rgba(0, 255, 0, 0.2); border-radius: 3px; background: rgba(0, 20, 0, 0.35); color: #4b7a4b; font-size: 10px; font-family: "Courier New", monospace; line-height: 1.4;';
+                const emptyTitle = document.createTextNode('[ AUCUNE CIBLE ENREGISTRÉE ]');
+                const emptyBr = document.createElement('br');
+                const emptySub = document.createElement('span');
+                emptySub.style.cssText = 'font-size: 9px; color: #3b5f3b;';
+                emptySub.textContent = 'Utilisez "+ PIN MAP CENTER" ou cherchez des coordonnées GPS dans le terminal';
+                emptyBox.appendChild(emptyTitle);
+                emptyBox.appendChild(emptyBr);
+                emptyBox.appendChild(emptySub);
+                container.appendChild(emptyBox);
+                return;
+            }
+
+            list.forEach((item, idx) => {
+                if (!item || typeof item !== 'object') return;
+                const numLat = Number(item.lat);
+                const numLng = Number(item.lng);
+                if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) return;
+
+                const safeId = sanitizeWatchlistId(item.id, idx);
+                const safeTagClass = sanitizeWatchlistTagClass(item.tag);
+                const rawName = String(item.name || 'CIBLE');
+                const rawDesc = item.desc ? String(item.desc) : '';
+                const rawTagText = String(item.tagText || 'PERSO');
+
+                const card = document.createElement('div');
+                card.className = 'watchlist-card';
+                card.id = `watchlist-item-${safeId}`;
+                card.addEventListener('click', () => {
+                    flyToWatchlistTarget(safeId, numLat, numLng, rawName);
+                });
+
+                const topRow = document.createElement('div');
+                topRow.style.cssText = 'display:flex; justify-content:space-between; align-items:flex-start; gap:4px;';
+
+                const titleDiv = document.createElement('div');
+                titleDiv.style.cssText = 'font-weight:bold; font-size:11px; color:#fff; line-height:1.2;';
+                titleDiv.textContent = rawName;
+                topRow.appendChild(titleDiv);
+
+                const rightBox = document.createElement('div');
+                rightBox.style.cssText = 'display:flex; align-items:center; gap:4px;';
+
+                const tagSpan = document.createElement('span');
+                tagSpan.className = `watchlist-tag ${safeTagClass}`;
+                tagSpan.textContent = rawTagText;
+                rightBox.appendChild(tagSpan);
+
+                const delBtn = document.createElement('button');
+                delBtn.type = 'button';
+                delBtn.style.cssText = 'background:transparent; border:none; color:#ff4444; font-size:12px; cursor:pointer; padding:0 3px; line-height:1;';
+                delBtn.title = 'Supprimer';
+                delBtn.textContent = '✖';
+                delBtn.addEventListener('click', (ev) => {
+                    ev.stopPropagation();
+                    deleteWatchlistItem(item.id);
+                });
+                rightBox.appendChild(delBtn);
+
+                topRow.appendChild(rightBox);
+                card.appendChild(topRow);
+
+                if (rawDesc) {
+                    const descDiv = document.createElement('div');
+                    descDiv.style.cssText = 'font-size:9.5px; color:#88aa88; margin-top:3px; line-height:1.2;';
+                    descDiv.textContent = rawDesc;
+                    card.appendChild(descDiv);
+                }
+
+                const coordDiv = document.createElement('div');
+                coordDiv.style.cssText = 'font-size:9px; color:#00ffff; margin-top:4px; font-family:monospace; letter-spacing:0.5px;';
+                coordDiv.textContent = `${numLat.toFixed(4)}°, ${numLng.toFixed(4)}°`;
+                card.appendChild(coordDiv);
+
+                container.appendChild(card);
+            });
+        }
+
+        function flyToWatchlistTarget(id, lat, lng, name) {
+            const numLat = Number(lat);
+            const numLng = Number(lng);
+            if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) return;
+
+            const safeId = sanitizeWatchlistId(id, 0);
+            document.querySelectorAll('.watchlist-card').forEach(c => c.classList.remove('active'));
+            const activeCard = document.getElementById(`watchlist-item-${safeId}`);
+            if (activeCard) activeCard.classList.add('active');
+
+            map.flyTo([numLat, numLng], 15, { animate: true, duration: 1.8 });
+            setTargetPulseLock(numLat, numLng, name, true);
+        }
+
+        function pinCurrentMapCenter() {
+            const center = map.getCenter();
+            const defaultName = `Point Tactique [${center.lat.toFixed(3)}, ${center.lng.toFixed(3)}]`;
+            const name = prompt("Nom de la cible favorite à épingler :", defaultName);
+            if (!name || !name.trim()) return;
+
+            addCoordToWatchlist(name.trim(), center.lat, center.lng, 'Observation manuelle carte', 'PERSO', 'tag-custom');
+        }
+
+        function addCoordToWatchlist(name, lat, lng, desc = 'Cible personnalisée', tagText = 'PERSO', tag = 'tag-custom') {
+            const numLat = Number(lat);
+            const numLng = Number(lng);
+            if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) return;
+
+            let list = getWatchlist();
+            const exists = list.some(item => Math.abs(item.lat - numLat) < 0.001 && Math.abs(item.lng - numLng) < 0.001);
+            if (exists) {
+                alert(`"${name}" est déjà présent dans la Watchlist.`);
+                return;
+            }
+
+            const newItem = {
+                id: 'custom-' + Date.now(),
+                name: String(name || 'CIBLE'),
+                country: 'CUSTOM',
+                tag: sanitizeWatchlistTagClass(tag),
+                tagText: String(tagText || 'PERSO'),
+                desc: String(desc || ''),
+                lat: Number(numLat.toFixed(5)),
+                lng: Number(numLng.toFixed(5))
+            };
+
+            list.unshift(newItem);
+            saveWatchlist(list);
+            renderWatchlistUI();
+            
+            flyToWatchlistTarget(newItem.id, newItem.lat, newItem.lng, newItem.name);
+        }
+
+        function deleteWatchlistItem(id) {
+            let list = getWatchlist();
+            list = list.filter(item => item && item.id !== id);
+            saveWatchlist(list);
+            renderWatchlistUI();
+        }
+
+        function clearAllWatchlist() {
+            const list = getWatchlist();
+            if (list.length === 0) return;
+            if (confirm("Supprimer toutes les cibles de la Watchlist ?")) {
+                saveWatchlist([]);
+                renderWatchlistUI();
+            }
+        }
+
         L.control.zoom({ position: 'topleft' }).addTo(map);
+        renderWatchlistUI();
 
                 // Bing QuadKey implementation
         L.TileLayer.Bing = L.TileLayer.extend({
@@ -1130,8 +1724,11 @@
             return { img, intel };
         }
 
+        let currentDossierData = null;
+
         function openDossier(name, type, country, latlng) {
             currentAsset = latlng;
+            currentDossierData = { name, type, country, latlng };
             let pingColor = '#0f0';
             if (country === 'ALGERIA') pingColor = '#ff0000';
             else if (country === 'MOROCCO') pingColor = '#00ff1f';
@@ -1146,7 +1743,41 @@
             document.getElementById('d_country').innerText = country;
             document.getElementById('d_img').src = details.img;
             document.getElementById('d_intel').innerText = details.intel;
+            
+            const pinBtn = document.getElementById('dossier-pin-btn');
+            if (pinBtn) {
+                pinBtn.innerText = '★ ÉPINGLER DANS LA WATCHLIST';
+                pinBtn.style.color = '#00ffff';
+                pinBtn.style.borderColor = '#00ffff';
+            }
             document.getElementById('dossier-panel').classList.add('open');
+        }
+
+        function pinDossierAsset() {
+            if (!currentDossierData || !currentDossierData.latlng) {
+                alert("Aucun actif sélectionné.");
+                return;
+            }
+            const { name, type, country, latlng } = currentDossierData;
+            let tag = 'tag-custom';
+            let tagText = 'ASSET';
+            if (country === 'MOROCCO') { tag = 'tag-mor'; tagText = 'MOR'; }
+            else if (country === 'ALGERIA') { tag = 'tag-alg'; tagText = 'ALG'; }
+            else if (country === 'SPAIN') { tag = 'tag-esp'; tagText = 'ESP'; }
+            else if (country === 'MAURITANIA') { tag = 'tag-custom'; tagText = 'MRT'; }
+            
+            addCoordToWatchlist(name, latlng[0], latlng[1], `${type} // ${country}`, tagText, tag);
+            const btn = document.getElementById('dossier-pin-btn');
+            if (btn) {
+                btn.innerText = '✓ ÉPINGLÉ DANS LA WATCHLIST!';
+                btn.style.color = '#00ff66';
+                btn.style.borderColor = '#00ff66';
+                setTimeout(() => {
+                    btn.innerText = '★ ÉPINGLER DANS LA WATCHLIST';
+                    btn.style.color = '#00ffff';
+                    btn.style.borderColor = '#00ffff';
+                }, 2500);
+            }
         }
 
         function closeDossier() {
@@ -1207,6 +1838,7 @@
         map.on('click', function(e) { 
             if(activeSelectionMarker) map.removeLayer(activeSelectionMarker);
             if (typeof closeDossier === 'function') closeDossier();
+            clearTargetPulseLock();
             const briefingModal = document.getElementById('briefing-modal');
             if (briefingModal) briefingModal.style.display = 'none';
         });
@@ -1215,25 +1847,12 @@
             let lng = e.latlng.lng.toFixed(5);
             let coordString = `${lat}, ${lng}`;
             
-            // Copy to clipboard
-            navigator.clipboard.writeText(coordString).then(() => {
-                // Show a quick popup
-                L.popup({ className: 'custom-popup' })
-                    .setLatLng(e.latlng)
-                    .setContent(`<div style="text-align:center; color:#0f0; font-weight:bold; font-family:'Courier New'; border:1px solid #0f0; padding:5px; background:#000;">TARGET ACQUIRED<br>${coordString}<br><span style="font-size:9px; color:#fff;">COPIED TO CLIPBOARD</span></div>`)
-                    .openOn(map);
-            });
+            navigator.clipboard.writeText(coordString).catch(() => {});
+            setTargetPulseLock(e.latlng.lat, e.latlng.lng, `POINT GPS [${lat}, ${lng}]`, true);
         });
-
-        
-        
 
         // -------------------------
         // FEATURE: COMMAND TERMINAL
-
-        
-        
-
         // -------------------------
         let targetCrosshair = null;
 
@@ -1242,32 +1861,21 @@
                 let val = e.target.value.trim();
                 if (!val) return;
                 
-                // Check if it's coordinates (e.g. 27.123, -10.456)
-                let coordMatch = val.match(/^(-?\d+(\.\d+)?)[,\s]+(-?\d+(\.\d+)?)$/);
-                if (coordMatch) {
-                    let lat = parseFloat(coordMatch[1]);
-                    let lng = parseFloat(coordMatch[3]);
-                    executeCoordinateDrop(lat, lng);
+                let parsed = parseCoordinates(val);
+                if (parsed) {
+                    executeCoordinateDrop(parsed.lat, parsed.lng, 'CIBLE COORDONNÉES GPS');
                 } else {
                     executeAssetSearch(val.toLowerCase());
                 }
                 
                 e.target.value = '';
+                const box = document.getElementById('cmd-suggestions');
+                if (box) box.style.display = 'none';
             }
         }
 
-        
-        function escapeHtml(str) {
-            return String(str == null ? '' : str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#39;');
-        }
-
         function handleTerminalSuggest(e) {
-            const val = e.target.value.trim().toUpperCase();
+            const val = e.target.value.trim();
             const box = document.getElementById('cmd-suggestions');
             if (!box) return;
             if (val.length < 2) {
@@ -1276,6 +1884,24 @@
                 return;
             }
             
+            // Check for live coordinate entry (DD, DMS, Cardinals)
+            const parsedCoord = parseCoordinates(val);
+            if (parsedCoord) {
+                box.textContent = '';
+                const item = document.createElement('div');
+                item.style.cssText = 'padding: 7px 10px; border-bottom: 1px dashed #00ff66; cursor: pointer; color: #00ff66; background: rgba(0, 30, 10, 0.95); font-weight: bold; display: flex; align-items: center; justify-content: space-between;';
+                item.innerHTML = `<span>🎯 <span style="color:#00ffff;">[GPS LOCK]</span> ${parsedCoord.formatted}</span> <span style="font-size:9px; color:#88aa88; font-weight:normal;">[ENTRÉE]</span>`;
+                item.addEventListener('click', () => {
+                    box.style.display = 'none';
+                    document.getElementById('cmd-terminal').value = '';
+                    executeCoordinateDrop(parsedCoord.lat, parsedCoord.lng, 'CIBLE GPS SAISIE');
+                });
+                box.appendChild(item);
+                box.style.display = 'block';
+                return;
+            }
+
+            const upperVal = val.toUpperCase();
             box.textContent = '';
             const frag = document.createDocumentFragment();
             let count = 0;
@@ -1284,7 +1910,10 @@
                 flightLayer.eachLayer(layer => {
                     if (layer.flightData && count < 15) {
                         const f = layer.flightData;
-                        if (f.callsign.includes(val) || f.type.includes(val) || f.reg.includes(val)) {
+                        const callsignUpper = (f.callsign || '').toUpperCase();
+                        const typeUpper = (f.type || '').toUpperCase();
+                        const regUpper = (f.reg || '').toUpperCase();
+                        if (callsignUpper.includes(upperVal) || typeUpper.includes(upperVal) || regUpper.includes(upperVal)) {
                             const lat = layer.getLatLng().lat;
                             const lng = layer.getLatLng().lng;
                             const tag = f.isRMAF ? '[RMAF]' : (f.isMil ? '[MIL]' : '[CIV]');
@@ -1309,7 +1938,7 @@
             
             for (let f of allFeatures) {
                 if (count >= 25) break;
-                if (f.properties && f.properties.name && f.properties.name.toUpperCase().includes(val)) {
+                if (f.properties && f.properties.name && f.properties.name.toUpperCase().includes(upperVal)) {
                     if (f.geometry.type === 'Point') {
                         const lat = f.geometry.coordinates[1];
                         const lng = f.geometry.coordinates[0];
@@ -1359,27 +1988,12 @@
             }
         });
 
-        function executeCoordinateDrop(lat, lng) {
+        function executeCoordinateDrop(lat, lng, name = 'COORDONNÉES CIBLE') {
             const numLat = Number(lat);
             const numLng = Number(lng);
             if (!Number.isFinite(numLat) || !Number.isFinite(numLng) || numLat < -90 || numLat > 90 || numLng < -180 || numLng > 180) return;
-            map.flyTo([numLat, numLng], 12, { animate: true, duration: 2 });
-            
-            if (targetCrosshair) map.removeLayer(targetCrosshair);
-            
-            // Draw a cool targeting crosshair
-            let icon = L.divIcon({
-                className: 'target-crosshair',
-                html: '<div style="width: 40px; height: 40px; border: 2px solid #f00; border-radius: 70%; position: relative;"><div style="position: absolute; top: 19px; left: -10px; width: 60px; height: 2px; background: #f00;"></div><div style="position: absolute; top: -10px; left: 19px; width: 2px; height: 60px; background: #f00;"></div></div>',
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
-            });
-            targetCrosshair = L.marker([numLat, numLng], {icon: icon}).addTo(map);
-            
-            // Remove it after 10 seconds
-            setTimeout(() => {
-                if (targetCrosshair) map.removeLayer(targetCrosshair);
-            }, 10000);
+            map.flyTo([numLat, numLng], 15, { animate: true, duration: 1.8 });
+            setTargetPulseLock(numLat, numLng, name, true);
         }
 
         function executeAssetSearch(query) {
@@ -1911,7 +2525,10 @@
             "Anti-Air (AAA)": "Anti-Aérien (AAA)",
             "SYS_ACTIVE // SAT_LINK_SECURE": "SYSTÈME_ACTIF // LIAISON_SAT_SÉCURISÉE",
             "ACTIVE OPERATOR": "OPÉRATEUR ACTIF",
-            "VERIFIED": "VÉRIFIÉ"
+            "VERIFIED": "VÉRIFIÉ",
+            "WATCHLIST & BOOKMARKS": "CIBLES FAVORITES & WATCHLIST",
+            "+ PIN MAP CENTER": "+ ÉPINGLER CENTRE CARTE",
+            "🗑 VIDER": "🗑 VIDER"
         };
 
         let currentLang = 'en';
@@ -2050,11 +2667,12 @@
             .then(res => res.json())
             .then(data => {
                 if (data && data.user) {
-                    const callsign = data.user.toUpperCase();
+                    const rawCallsign = data.user.toUpperCase();
+                    const callsign = escapeHtml(rawCallsign);
                     const callsignEl = document.getElementById('operator-callsign');
-                    if (callsignEl) callsignEl.textContent = callsign;
+                    if (callsignEl) callsignEl.textContent = rawCallsign;
                     const locEl = document.getElementById('operator-loc');
-                    if (locEl && data.country && data.country !== 'XX') locEl.textContent = '[' + data.country + ']';
+                    if (locEl && data.country && data.country !== 'XX') locEl.textContent = '[' + escapeHtml(data.country) + ']';
 
                     const badgeBox = document.getElementById('operator-badge-box');
                     const roleLabel = document.getElementById('operator-role-label');
@@ -2382,6 +3000,13 @@
                     mapContainerEl.classList.remove('map-ctrl-rot-ready');
                 }
             });
+
+            // Prevent accidental browser page zoom when holding Ctrl and scrolling the mouse wheel
+            window.addEventListener('wheel', function(e) {
+                if (e.ctrlKey) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
 
             // Capture mousedown on map container in capture phase
             mapContainerEl.addEventListener('mousedown', function(e) {

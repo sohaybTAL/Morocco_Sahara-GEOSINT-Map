@@ -1,6 +1,4 @@
 import { next } from '@vercel/functions';
-import defaultUsers from './users.json';
-import defaultAlerts from './alerts.json';
 
 export const config = {
   matcher: '/(.*)',
@@ -9,6 +7,8 @@ export const config = {
 // In-memory ring buffer for recent access sessions
 const ACCESS_LOGS = [];
 const MAX_LOGS = 150;
+const LAST_ALERT_BY_USER = new Map();
+const SESSION_ALERT_COOLDOWN_MS = 30000;
 
 // Timing-safe string comparison
 async function safeEqual(a, b) {
@@ -27,25 +27,214 @@ async function safeEqual(a, b) {
   return diff === 0;
 }
 
-// Retrieve and merge authorized users: users.json + AUTHORIZED_USERS env + ADMIN_USERNAME/PASSWORD env
+const SESSION_TTL_SECONDS = 86400;
+
+// Require AUTH_SECRET strictly from server environment (no hardcoded fallback, fail-closed)
+function getAuthSecret() {
+  try {
+    const raw = process.env.AUTH_SECRET;
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function bytesToHex(uint8) {
+  let out = '';
+  for (let i = 0; i < uint8.length; i++) {
+    out += uint8[i].toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+function encodeBase64Url(str) {
+  const bytes = new TextEncoder().encode(String(str));
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+}
+
+function decodeBase64Url(b64url) {
+  if (typeof b64url !== 'string' || !/^[A-Za-z0-9_-]+$/.test(b64url)) return null;
+  let b64 = b64url.replace(/-/g, '+').replace(/_/g, '/');
+  while (b64.length % 4 !== 0) b64 += '=';
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return new TextDecoder().decode(bytes);
+  } catch (e) {
+    return null;
+  }
+}
+
+// True HMAC-SHA-256 via Web Crypto API
+async function signHmacSha256(secret, message) {
+  if (!secret || typeof secret !== 'string') return null;
+  const enc = new TextEncoder();
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw',
+    enc.encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+  const sigBuf = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(String(message)));
+  return bytesToHex(new Uint8Array(sigBuf));
+}
+
+// Create an unambiguous signed session token: <base64url(JSON)>.<hmacHex>
+async function createSessionToken(username, password, ttlSeconds = SESSION_TTL_SECONDS, nowMs = Date.now()) {
+  const secret = getAuthSecret();
+  if (!secret || !username || password === undefined || password === null) return null;
+  const pwdDigest = await signHmacSha256(secret, `pwd:${String(password)}`);
+  if (!pwdDigest) return null;
+  const exp = Math.floor(nowMs / 1000) + Number(ttlSeconds);
+  const payloadJson = JSON.stringify({
+    u: String(username),
+    exp: exp,
+    ph: pwdDigest
+  });
+  const payloadB64 = encodeBase64Url(payloadJson);
+  const sigHex = await signHmacSha256(secret, payloadB64);
+  if (!sigHex) return null;
+  return `${payloadB64}.${sigHex}`;
+}
+
+// Verify HMAC-SHA-256 signature, expiration, user existence, and password binding
+async function verifyAuthToken(tokenStr, usersMap, nowMs = Date.now()) {
+  const secret = getAuthSecret();
+  if (!secret) return null;
+  if (!tokenStr || typeof tokenStr !== 'string' || !usersMap || typeof usersMap !== 'object') return null;
+
+  const trimmed = tokenStr.trim();
+  const dotIdx = trimmed.indexOf('.');
+  if (dotIdx <= 0 || trimmed.indexOf('.', dotIdx + 1) !== -1) return null;
+
+  const payloadB64 = trimmed.slice(0, dotIdx);
+  const providedSig = trimmed.slice(dotIdx + 1);
+  if (!payloadB64 || !/^[0-9a-f]{64}$/i.test(providedSig)) return null;
+
+  const expectedSig = await signHmacSha256(secret, payloadB64);
+  if (!expectedSig) return null;
+  const sigOk = await safeEqual(providedSig.toLowerCase(), expectedSig.toLowerCase());
+  if (!sigOk) return null;
+
+  const decodedJson = decodeBase64Url(payloadB64);
+  if (!decodedJson) return null;
+
+  let payload;
+  try {
+    payload = JSON.parse(decodedJson);
+  } catch (e) {
+    return null;
+  }
+
+  if (!payload || typeof payload !== 'object') return null;
+  const user = typeof payload.u === 'string' ? payload.u : '';
+  const exp = payload.exp;
+  const ph = typeof payload.ph === 'string' ? payload.ph : '';
+
+  if (!user || !Object.prototype.hasOwnProperty.call(usersMap, user)) return null;
+  if (typeof exp !== 'number' || !Number.isFinite(exp)) return null;
+
+  const nowSec = Math.floor(nowMs / 1000);
+  if (exp <= nowSec || exp > nowSec + SESSION_TTL_SECONDS + 300) return null;
+
+  const validVal = usersMap[user];
+  const validPwd = (typeof validVal === 'object' && validVal.password) ? validVal.password : validVal;
+  const expectedPh = await signHmacSha256(secret, `pwd:${String(validPwd)}`);
+  if (!expectedPh) return null;
+
+  const pwdOk = await safeEqual(ph.toLowerCase(), expectedPh.toLowerCase());
+  return pwdOk ? user : null;
+}
+
+// Normalize and inspect URL paths to block sensitive/internal files regardless of encoding or casing
+function isProtectedPath(rawPathname) {
+  if (typeof rawPathname !== 'string' || rawPathname.length === 0) return true;
+  let current = rawPathname;
+  try {
+    for (let i = 0; i < 4; i++) {
+      const decoded = decodeURIComponent(current);
+      if (decoded === current) break;
+      current = decoded;
+    }
+  } catch (e) {
+    // Reject malformed percent-encoded paths
+    return true;
+  }
+
+  if (current.includes('\0')) return true;
+
+  // Normalize slashes, collapse repeated slashes, strip trailing dots/spaces per segment
+  const normalized = current.replace(/\\/g, '/').replace(/\/+/g, '/').toLowerCase();
+  const rawSegments = normalized.split('/');
+  const cleanSegments = [];
+
+  for (let i = 0; i < rawSegments.length; i++) {
+    const seg = rawSegments[i].replace(/[\s.]+$/g, '');
+    if (!seg || seg === '.') continue;
+    if (seg === '..') return true;
+    // Block any hidden dotfile or dot-directory (.env, .git, .vercel, .backups, etc.)
+    if (seg.startsWith('.')) return true;
+    // Block backup/swap/source artifacts anywhere in the path
+    if (
+      seg.endsWith('.bak') ||
+      seg.endsWith('.old') ||
+      seg.endsWith('.orig') ||
+      seg.endsWith('.tmp') ||
+      seg.endsWith('.swp') ||
+      seg.endsWith('.env')
+    ) {
+      return true;
+    }
+    cleanSegments.push(seg);
+  }
+
+  const canonical = '/' + cleanSegments.join('/');
+  const lastSegment = cleanSegments.length > 0 ? cleanSegments[cleanSegments.length - 1] : '';
+
+  const blockedExact = new Set([
+    '/users.json',
+    '/alerts.json',
+    '/package.json',
+    '/package-lock.json',
+    '/vercel.json',
+    '/middleware.js',
+    '/middleware.ts',
+    '/middleware.mjs',
+    '/middleware.cjs'
+  ]);
+
+  if (blockedExact.has(canonical) || blockedExact.has('/' + lastSegment)) {
+    return true;
+  }
+
+  return false;
+}
+
+
+// Retrieve and merge authorized users from environment variables (AUTHORIZED_USERS + ADMIN_USERNAME/ADMIN_PASSWORD)
 function getAuthorizedUsers() {
   const users = {};
 
-  // 1. Load defaults from users.json
+  // 1. Load from AUTHORIZED_USERS environment variable (e.g. "user1:pass1,user2:pass2" or JSON)
   try {
-    if (defaultUsers && typeof defaultUsers === 'object') {
-      Object.assign(users, defaultUsers);
-    }
-  } catch (e) {
-    console.error('[AUTH] Failed loading users.json:', e);
-  }
-
-  // 2. Load from AUTHORIZED_USERS environment variable (e.g. "user1:pass1,user2:pass2" or JSON)
-  if (process.env.AUTHORIZED_USERS) {
-    try {
-      const raw = process.env.AUTHORIZED_USERS.trim();
+    const rawAuthUsers = process.env.AUTHORIZED_USERS;
+    if (typeof rawAuthUsers === 'string' && rawAuthUsers.trim().length > 0) {
+      const raw = rawAuthUsers.trim();
       if (raw.startsWith('{')) {
-        Object.assign(users, JSON.parse(raw));
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          Object.assign(users, parsed);
+        }
       } else {
         raw.split(',').forEach(pair => {
           const colonIdx = pair.indexOf(':');
@@ -56,45 +245,52 @@ function getAuthorizedUsers() {
           }
         });
       }
-    } catch (e) {
-      console.error('[AUTH] Failed parsing AUTHORIZED_USERS:', e);
     }
+  } catch (e) {
+    console.error('[AUTH] Failed parsing AUTHORIZED_USERS:', e);
   }
 
-  // 3. Fallback / backward compatibility: ADMIN_USERNAME & ADMIN_PASSWORD
-  if (process.env.ADMIN_USERNAME && process.env.ADMIN_PASSWORD) {
-    users[process.env.ADMIN_USERNAME.trim()] = process.env.ADMIN_PASSWORD.trim();
-  }
+  // 2. Explicit admin credentials from ADMIN_USERNAME & ADMIN_PASSWORD
+  try {
+    const adminUser = process.env.ADMIN_USERNAME;
+    const adminPass = process.env.ADMIN_PASSWORD;
+    if (typeof adminUser === 'string' && typeof adminPass === 'string') {
+      const u = adminUser.trim();
+      const p = adminPass.trim();
+      if (u && p) {
+        const existing = users[u];
+        if (!existing || typeof existing !== 'object') {
+          users[u] = { password: p, role: 'admin' };
+        }
+      }
+    }
+  } catch (e) {}
 
   return users;
 }
 
-// Retrieve webhook configuration from env vars OR alerts.json
+// Retrieve webhook configuration strictly from environment variables
 function getWebhookConfig() {
-  let discord = (process.env.DISCORD_WEBHOOK_URL || '').trim();
-  let teleToken = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
-  let teleChat = (process.env.TELEGRAM_CHAT_ID || '').trim();
+  let discord = '';
+  let teleToken = '';
+  let teleChat = '';
 
   try {
-    if (defaultAlerts && typeof defaultAlerts === 'object') {
-      if (!discord && defaultAlerts.discord_webhook_url) {
-        discord = defaultAlerts.discord_webhook_url.trim();
-      }
-      if (!teleToken && defaultAlerts.telegram_bot_token) {
-        teleToken = defaultAlerts.telegram_bot_token.trim();
-      }
-      if (!teleChat && defaultAlerts.telegram_chat_id) {
-        teleChat = String(defaultAlerts.telegram_chat_id).trim();
-      }
-    }
+    discord = typeof process.env.DISCORD_WEBHOOK_URL === 'string' ? process.env.DISCORD_WEBHOOK_URL.trim() : '';
+  } catch (e) {}
+  try {
+    teleToken = typeof process.env.TELEGRAM_BOT_TOKEN === 'string' ? process.env.TELEGRAM_BOT_TOKEN.trim() : '';
+  } catch (e) {}
+  try {
+    teleChat = typeof process.env.TELEGRAM_CHAT_ID === 'string' ? process.env.TELEGRAM_CHAT_ID.trim() : '';
   } catch (e) {}
 
   return { discord, teleToken, teleChat };
 }
 
-// Resolve operator profile, clearance, and role
+// Resolve operator profile, clearance, and role based strictly on explicit server authorization
 function getUserProfile(username, usersMap = {}) {
-  if (!username) {
+  if (typeof username !== 'string' || username.length === 0 || username !== username.trim()) {
     return {
       user: 'unknown',
       role: 'operator',
@@ -104,16 +300,47 @@ function getUserProfile(username, usersMap = {}) {
       isAdmin: false
     };
   }
-  const target = username.toLowerCase().trim();
-  const entry = usersMap[username] || usersMap[target];
-  const customRole = typeof entry === 'object' && entry.role ? entry.role.toLowerCase().trim() : null;
 
-  // Root Admin verification (built-in accounts, env variables, or role: admin)
-  const isEnvAdmin = Boolean(process.env.ADMIN_USERNAME && target === process.env.ADMIN_USERNAME.toLowerCase().trim());
-  const isEnvAdminList = Boolean(process.env.ADMIN_USERS && process.env.ADMIN_USERS.toLowerCase().split(',').map(s => s.trim()).includes(target));
-  const isBuiltInAdmin = (target === 'admin' || target === 'elmakhchounix' || target === 'sohayb' || customRole === 'admin' || customRole === 'root');
+  if (!usersMap || typeof usersMap !== 'object' || !Object.prototype.hasOwnProperty.call(usersMap, username)) {
+    return {
+      user: username,
+      role: 'operator',
+      roleTag: 'OPERATOR',
+      roleTitle: 'Opérateur de Terrain',
+      clearance: 'LEVEL 02 // TACTICAL',
+      isAdmin: false
+    };
+  }
 
-  if (isEnvAdmin || isEnvAdminList || isBuiltInAdmin) {
+  const targetLower = username.toLowerCase();
+  const entry = usersMap[username];
+  const customRole = (entry && typeof entry === 'object' && typeof entry.role === 'string')
+    ? entry.role.toLowerCase().trim()
+    : null;
+
+  // An explicitly assigned non-admin role (e.g. 'operator', 'analyst', 'guest') can never be elevated to admin
+  const hasExplicitLimitedRole = Boolean(customRole && customRole !== 'admin' && customRole !== 'root');
+
+  let isEnvAdmin = false;
+  let isEnvAdminList = false;
+  try {
+    const rawAdminUser = process.env.ADMIN_USERNAME;
+    if (typeof rawAdminUser === 'string' && rawAdminUser.trim().length > 0) {
+      isEnvAdmin = (username === rawAdminUser.trim());
+    }
+  } catch (e) {}
+
+  try {
+    const rawAdminList = process.env.ADMIN_USERS;
+    if (typeof rawAdminList === 'string' && rawAdminList.trim().length > 0) {
+      const allowedAdmins = rawAdminList.split(',').map(s => s.trim()).filter(Boolean);
+      isEnvAdminList = allowedAdmins.includes(username);
+    }
+  } catch (e) {}
+
+  const isExplicitRoleAdmin = (customRole === 'admin' || customRole === 'root');
+
+  if (!hasExplicitLimitedRole && (isExplicitRoleAdmin || isEnvAdmin || isEnvAdminList)) {
     return {
       user: username,
       role: 'admin',
@@ -124,7 +351,7 @@ function getUserProfile(username, usersMap = {}) {
     };
   }
 
-  if (target.includes('analyst') || customRole === 'analyst') {
+  if (customRole === 'analyst' || (!customRole && targetLower.includes('analyst'))) {
     return {
       user: username,
       role: 'analyst',
@@ -135,7 +362,7 @@ function getUserProfile(username, usersMap = {}) {
     };
   }
 
-  if (target.includes('guest') || customRole === 'guest') {
+  if (customRole === 'guest' || (!customRole && targetLower.includes('guest'))) {
     return {
       user: username,
       role: 'guest',
@@ -161,17 +388,23 @@ function isUserAdmin(username, usersMap = {}) {
   return getUserProfile(username, usersMap).isAdmin;
 }
 
-// Record login event and dispatch instant webhook alerts (Discord / Telegram) with role differentiation
-function recordAndAlert(user, req, usersMap = {}) {
+// Record login event and dispatch webhook alerts (Discord / Telegram) with background lifecycle management
+function recordAndAlert(user, req, usersMap = {}, event = null, nowMs = Date.now()) {
+  const lastAlertTs = LAST_ALERT_BY_USER.get(user);
+  if (typeof lastAlertTs === 'number' && (nowMs - lastAlertTs) < SESSION_ALERT_COOLDOWN_MS && (nowMs >= lastAlertTs)) {
+    return Promise.resolve([]);
+  }
+  LAST_ALERT_BY_USER.set(user, nowMs);
+
   const profile = getUserProfile(user, usersMap);
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || req.headers.get('x-real-ip') || 'Direct Connection';
   const country = req.headers.get('x-vercel-ip-country') || 'XX';
   const city = req.headers.get('x-vercel-ip-city') || 'Unknown';
   const userAgent = req.headers.get('user-agent') || 'Unknown Client';
-  const timestamp = new Date().toISOString();
+  const timestamp = new Date(nowMs).toISOString();
 
   const entry = {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    id: `${nowMs}-${Math.random().toString(36).slice(2, 7)}`,
     user,
     role: profile.role,
     roleTag: profile.roleTag,
@@ -200,17 +433,17 @@ function recordAndAlert(user, req, usersMap = {}) {
     if (profile.isAdmin) {
       embedTitle = "👑 [ROOT ADMIN CLEARANCE] Console Initialized";
       embedDesc = "👑 **Session Administrateur Suprême Activée**\nAccès total au système cartographique, aux flux satellitaires et au registre d'audit (/admin).";
-      embedColor = 0xef4444; // Imperial Crimson Red
+      embedColor = 0xef4444;
       roleField = "👑 `COMMANDEMENT ROOT` (Niveau 1)";
     } else if (profile.role === 'analyst') {
       embedTitle = "🎖️ [INTEL ANALYST ACCESS] Field Session Active";
       embedDesc = "🎖️ **Session Analyste Renseignement Activée**\nAccès opérationnel aux couches cartographiques et installations militaires.";
-      embedColor = 0x38bdf8; // Sky Blue
+      embedColor = 0x38bdf8;
       roleField = "🎖️ `ANALYSTE RENSEIGNEMENT` (Niveau 2)";
     } else {
       embedTitle = "🛡️ [OPERATOR ACCESS] Tactical Map Session Active";
       embedDesc = "🛡️ **Session Opérateur de Terrain Activée**\nConsultation du dispositif cartographique et couches opérationnelles.";
-      embedColor = 0x00ff66; // Emerald Tactical Green
+      embedColor = 0x00ff66;
       roleField = "🛡️ `OPÉRATEUR DE TERRAIN` (Niveau 2)";
     }
 
@@ -235,11 +468,14 @@ function recordAndAlert(user, req, usersMap = {}) {
     };
 
     promises.push(
-      fetch(webhooks.discord, {
+      Promise.resolve().then(() => fetch(webhooks.discord, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
-      }).catch(err => console.error('[WEBHOOK] Discord error:', err))
+      })).catch(err => {
+        console.error('[WEBHOOK] Discord error:', err);
+        return Promise.reject(err);
+      })
     );
   }
 
@@ -259,7 +495,7 @@ function recordAndAlert(user, req, usersMap = {}) {
       `🖥️ *Client:* \`${userAgent.slice(0, 80)}\``;
 
     promises.push(
-      fetch(`https://api.telegram.org/bot${webhooks.teleToken}/sendMessage`, {
+      Promise.resolve().then(() => fetch(`https://api.telegram.org/bot${webhooks.teleToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -267,19 +503,40 @@ function recordAndAlert(user, req, usersMap = {}) {
           text,
           parse_mode: 'Markdown'
         })
-      }).catch(err => console.error('[WEBHOOK] Telegram error:', err))
+      })).catch(err => {
+        console.error('[WEBHOOK] Telegram error:', err);
+        return Promise.reject(err);
+      })
     );
   }
 
-  if (promises.length > 0) {
-    Promise.allSettled(promises);
+  if (promises.length === 0) {
+    return Promise.resolve([]);
   }
+
+  const settledPromise = Promise.allSettled(promises);
+  if (event && typeof event.waitUntil === 'function') {
+    try {
+      event.waitUntil(settledPromise);
+    } catch (e) {}
+  }
+  return settledPromise;
 }
 
 // -------------------------------------------------------------
 // MAIN MIDDLEWARE ENTRY POINT
 // -------------------------------------------------------------
-export default async function middleware(req) {
+export default async function middleware(req, event) {
+  const url = new URL(req.url);
+
+  // 0. Block unauthorized direct access to sensitive system/configuration/backup/source files
+  if (isProtectedPath(url.pathname)) {
+    return new Response(JSON.stringify({ error: 'Access Denied: Protected Asset' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+    });
+  }
+
   const basicAuth = req.headers.get('authorization');
   let authenticatedUser = null;
   const usersMap = getAuthorizedUsers();
@@ -313,14 +570,16 @@ export default async function middleware(req) {
     }
   }
 
-  // 2. Fallback to operator cookie for internal API endpoints
+  // 2. Cryptographically signed HMAC-SHA-256 session token verification
   if (!authenticatedUser) {
     const cookieHeader = req.headers.get('cookie') || '';
-    const match = cookieHeader.match(/geoint_operator=([^;]+)/);
+    const match = cookieHeader.match(/(?:^|;\s*)geoint_auth=([^;]+)/);
     if (match && match[1]) {
-      const candidate = decodeURIComponent(match[1]);
-      if (usersMap[candidate]) {
-        authenticatedUser = candidate;
+      try {
+        const rawToken = decodeURIComponent(match[1].trim());
+        authenticatedUser = await verifyAuthToken(rawToken, usersMap);
+      } catch (e) {
+        authenticatedUser = null;
       }
     }
   }
@@ -328,6 +587,15 @@ export default async function middleware(req) {
   // --- AUTHENTICATED REQUESTS ---
   if (authenticatedUser) {
     const url = new URL(req.url);
+    const forwardedProto = (req.headers.get('x-forwarded-proto') || '').split(',')[0].trim().toLowerCase();
+    let isProdEnv = false;
+    try {
+      isProdEnv = process.env.NODE_ENV === 'production';
+    } catch (e) {}
+    const isSecure = url.protocol === 'https:' ||
+      forwardedProto === 'https' ||
+      isProdEnv;
+    const secureAttr = isSecure ? '; Secure' : '';
 
     // Dynamic Apple MapKit Satellite token endpoint
     if (url.pathname === '/apple-key') {
@@ -410,8 +678,12 @@ export default async function middleware(req) {
           isAdmin: p.isAdmin
         };
       });
+      const authoritativeLogs = ACCESS_LOGS.map(l => ({
+        ...l,
+        isAdmin: Boolean(l && typeof l.user === 'string' && isUserAdmin(l.user, usersMap))
+      }));
       return new Response(JSON.stringify({
-        logs: ACCESS_LOGS,
+        logs: authoritativeLogs,
         registeredUsers: accountsList,
         webhooks: {
           discord: Boolean(webhooks.discord),
@@ -461,40 +733,48 @@ export default async function middleware(req) {
 
     // Track user sessions (30s cooldown between alerts)
     const cookieHeader = req.headers.get('cookie') || '';
-    const sessionCookieKey = `geoint_session_${authenticatedUser}`;
-    const isNewSession = !cookieHeader.includes(sessionCookieKey);
+    const sessionCookieKey = `geoint_session_${encodeURIComponent(authenticatedUser)}`;
+    const isNewSession = !cookieHeader.includes(`${sessionCookieKey}=`);
 
     if (isNewSession) {
-      recordAndAlert(authenticatedUser, req, usersMap);
+      recordAndAlert(authenticatedUser, req, usersMap, event);
     }
+
+    const userVal = usersMap[authenticatedUser];
+    const userPwd = (typeof userVal === 'object' && userVal.password) ? userVal.password : userVal;
+    const signedSessionToken = await createSessionToken(authenticatedUser, String(userPwd), SESSION_TTL_SECONDS);
 
     // Admin Audit Dashboard UI (/admin)
     if (url.pathname === '/admin' || url.pathname === '/admin/') {
       if (!isUserAdmin(authenticatedUser, usersMap)) {
         return new Response(renderForbiddenPage(authenticatedUser, usersMap), {
           status: 403,
-          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+          headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
         });
       }
-      if (ACCESS_LOGS.length === 0) {
-        recordAndAlert(authenticatedUser, req, usersMap);
-      }
-      const adminHeaders = new Headers({
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-store'
-      });
-      adminHeaders.append('Set-Cookie', `geoint_operator=${encodeURIComponent(authenticatedUser)}; Path=/; SameSite=Lax; Max-Age=86400`);
-      return new Response(renderAdminDashboard(authenticatedUser, usersMap), {
+      const adminRes = new Response(renderAdminDashboard(authenticatedUser, usersMap), {
         status: 200,
-        headers: adminHeaders
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store'
+        }
       });
+      if (signedSessionToken) {
+        adminRes.headers.append('Set-Cookie', `geoint_auth=${encodeURIComponent(signedSessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secureAttr}`);
+      }
+      if (isNewSession) {
+        adminRes.headers.append('Set-Cookie', `${sessionCookieKey}=1; Path=/; HttpOnly; SameSite=Lax; Max-Age=30${secureAttr}`);
+      }
+      return adminRes;
     }
 
-    // Continue to static files & attach operator cookie
+    // Continue to static files & attach signed session token cookie
     const res = next();
-    res.headers.set('Set-Cookie', `geoint_operator=${encodeURIComponent(authenticatedUser)}; Path=/; SameSite=Lax; Max-Age=86400`);
+    if (signedSessionToken) {
+      res.headers.set('Set-Cookie', `geoint_auth=${encodeURIComponent(signedSessionToken)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL_SECONDS}${secureAttr}`);
+    }
     if (isNewSession) {
-      res.headers.append('Set-Cookie', `${sessionCookieKey}=1; Path=/; SameSite=Lax; Max-Age=30`);
+      res.headers.append('Set-Cookie', `${sessionCookieKey}=1; Path=/; HttpOnly; SameSite=Lax; Max-Age=30${secureAttr}`);
     }
     return res;
   }
@@ -668,8 +948,30 @@ function render401Page() {
 </html>`;
 }
 
+function escapeHtmlServer(val) {
+  if (val === null || val === undefined) return '';
+  return String(val)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function serializeJsonForScript(data) {
+  return JSON.stringify(data)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
 function renderForbiddenPage(user, usersMap = {}) {
   const profile = getUserProfile(user, usersMap);
+  const safeUser = escapeHtmlServer(user);
+  const safeRoleTitle = escapeHtmlServer(profile.roleTitle);
+  const safeClearance = escapeHtmlServer(profile.clearance);
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -744,9 +1046,9 @@ function renderForbiddenPage(user, usersMap = {}) {
     <div class="badge-forbidden">403 // ACCÈS NON AUTORISÉ</div>
     <h1>[ HABILITATION RESTREINTE ]</h1>
     <div class="profile-card">
-      <div>👤 Opérateur connecté : <strong style="color: #0f0;">${user}</strong></div>
-      <div>🎖️ Rôle détecté : <span style="color: #38bdf8;">${profile.roleTitle}</span></div>
-      <div>🔒 Accréditation : <span style="color: #cbd5e1;">${profile.clearance}</span></div>
+      <div>👤 Opérateur connecté : <strong style="color: #0f0;">${safeUser}</strong></div>
+      <div>🎖️ Rôle détecté : <span style="color: #38bdf8;">${safeRoleTitle}</span></div>
+      <div>🔒 Accréditation : <span style="color: #cbd5e1;">${safeClearance}</span></div>
     </div>
     <p>Votre compte dispose des habilitations nécessaires pour consulter la <strong>carte tactique</strong>.<br><br>Cependant, l&#39;accès au <strong>registre des audits (/admin)</strong>, aux flux d&#39;alertes et aux paramètres de surveillance est strictement réservé au <strong>Root Admin (Commandement Suprême)</strong>.</p>
     <a href="/" class="btn">&larr; RETOUR AU SYSTÈME CARTOGRAPHIQUE</a>
@@ -761,6 +1063,7 @@ function renderAdminDashboard(adminUser, usersMap) {
   const discordConfigured = Boolean(webhooks.discord);
   const telegramConfigured = Boolean(webhooks.teleToken && webhooks.teleChat);
   const totalSessions = ACCESS_LOGS.length;
+  const safeAdminUpper = escapeHtmlServer(String(adminUser || '').toUpperCase());
 
   let initialLogsHtml = '';
   if (ACCESS_LOGS.length === 0) {
@@ -768,22 +1071,35 @@ function renderAdminDashboard(adminUser, usersMap) {
   } else {
     initialLogsHtml = ACCESS_LOGS.map(l => {
       const d = new Date(l.timestamp);
-      const dateStr = d.toLocaleDateString() + ' ' + d.toLocaleTimeString();
-      const flag = l.country && l.country !== 'XX' ? ' [' + l.country + ']' : '';
-      const isAdmin = Boolean(l.isAdmin || l.user === 'admin' || l.user === 'elmakhchounix' || l.user === 'sohayb');
+      const dateStr = escapeHtmlServer(d.toLocaleDateString() + ' ' + d.toLocaleTimeString());
+      const safeTs = escapeHtmlServer(l.timestamp || '');
+      const rawCountry = l.country ? String(l.country) : 'XX';
+      const safeCountry = escapeHtmlServer(rawCountry);
+      const flag = rawCountry !== 'XX' ? ' [' + safeCountry + ']' : '';
+      const isAdmin = Boolean(l && typeof l.user === 'string' && isUserAdmin(l.user, usersMap));
       const roleSub = isAdmin ? '👑 NIVEAU 1 // ROOT' : '🛡️ NIVEAU 2 // OPÉRATEUR';
-      const userTag = (isAdmin ? '&#128081; ' : '&#128737;&#65039; ') + l.user;
+      const safeUser = escapeHtmlServer(l.user || 'ANONYME');
+      const userTag = (isAdmin ? '&#128081; ' : '&#128737;&#65039; ') + safeUser;
+      const safeIp = escapeHtmlServer(l.ip || 'Direct');
+      const safeCity = l.city && l.city !== 'Unknown' ? escapeHtmlServer(l.city) + ', ' : '';
+      const safeUa = escapeHtmlServer(l.userAgent || 'N/A');
       return '<tr>' +
-        '<td><strong>' + dateStr + '</strong><br><span style="font-size:10px;color:#64748b;">' + l.timestamp + '</span></td>' +
+        '<td><strong>' + dateStr + '</strong><br><span style="font-size:10px;color:#64748b;">' + safeTs + '</span></td>' +
         '<td><span class="badge-user ' + (isAdmin ? 'badge-admin' : '') + '">' + userTag + '</span><br><span style="font-size:10px;font-weight:bold;color:' + (isAdmin ? '#fca5a5' : '#86efac') + ';">' + roleSub + '</span></td>' +
-        '<td><code style="color:#38bdf8;">' + l.ip + '</code></td>' +
-        '<td>' + (l.city !== 'Unknown' ? l.city + ', ' : '') + l.country + flag + '</td>' +
-        '<td style="font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;">' + (l.userAgent || 'N/A') + '</td>' +
+        '<td><code style="color:#38bdf8;">' + safeIp + '</code></td>' +
+        '<td>' + safeCity + safeCountry + flag + '</td>' +
+        '<td style="font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;">' + safeUa + '</td>' +
       '</tr>';
     }).join('');
   }
 
-  const serverLogsJson = JSON.stringify(ACCESS_LOGS);
+  const authoritativeLogs = ACCESS_LOGS.map(l => ({
+    ...l,
+    isAdmin: Boolean(l && typeof l.user === 'string' && isUserAdmin(l.user, usersMap))
+  }));
+  const authorizedAdmins = usersList.filter(u => isUserAdmin(u, usersMap));
+  const safeServerLogsJson = serializeJsonForScript(authoritativeLogs);
+  const safeAdminUsersJson = serializeJsonForScript(authorizedAdmins);
 
   return `<!DOCTYPE html>
 <html lang="fr">
@@ -925,7 +1241,7 @@ function renderAdminDashboard(adminUser, usersMap) {
     <div class="header">
       <div class="header-title">
         <h1><span>🛡️</span> [ GEOINT SENTINEL // REGISTRE D'ACCÈS & AUDIT ]</h1>
-        <p>CONSOLE DE COMMANDEMENT SÉCURISÉE &bull; OPÉRATEUR ACTIF : <strong style="color: #0f0;">${adminUser.toUpperCase()}</strong> (ROOT)</p>
+        <p>CONSOLE DE COMMANDEMENT SÉCURISÉE &bull; OPÉRATEUR ACTIF : <strong style="color: #0f0;">${safeAdminUpper}</strong> (ROOT)</p>
       </div>
       <div>
         <a href="/" class="btn-tactical">&larr; ACCÉDER À LA CARTE</a>
@@ -981,17 +1297,20 @@ function renderAdminDashboard(adminUser, usersMap) {
             ${usersList.map(u => {
               const prof = getUserProfile(u, usersMap);
               const isAdmin = prof.isAdmin;
+              const safeU = escapeHtmlServer(u);
+              const safeRole = escapeHtmlServer(prof.roleTitle);
+              const safeClearance = escapeHtmlServer(prof.clearance);
               return `<tr>
                 <td>
                   <span class="badge-user ${isAdmin ? 'badge-admin' : ''}">
-                    ${isAdmin ? '👑 ' : '🛡️ '}${u}
+                    ${isAdmin ? '👑 ' : '🛡️ '}${safeU}
                   </span>
                 </td>
                 <td style="font-weight: bold; color: ${isAdmin ? '#fca5a5' : '#86efac'};">
-                  ${prof.roleTitle}
+                  ${safeRole}
                 </td>
                 <td>
-                  <code style="color: ${isAdmin ? '#ef4444' : '#38bdf8'}; font-size: 11px;">${prof.clearance}</code>
+                  <code style="color: ${isAdmin ? '#ef4444' : '#38bdf8'}; font-size: 11px;">${safeClearance}</code>
                 </td>
                 <td style="font-size: 11px; color: ${isAdmin ? '#cbd5e1' : '#94a3b8'};">
                   ${isAdmin ? '✅ Plein Accès (Carte + Registre d&#39;Audit /admin + Webhooks)' : '🔒 Carte Tactique Uniquement (/admin Verrouillé 403)'}
@@ -1006,9 +1325,9 @@ function renderAdminDashboard(adminUser, usersMap) {
       </div>
       <div class="guide-box">
         <strong>💡 Comment gérer les comptes et rôles :</strong><br>
-        Vous pouvez définir vos utilisateurs dans <code>users.json</code> :<br>
-        &bull; <strong>Format standard :</strong> <code>{"admin": "motdepasse", "matrix": "pass2026"}</code> (le compte <code>admin</code> reçoit automatiquement les privilèges Root, les autres sont Opérateurs de terrain).<br>
-        &bull; <strong>Ajout d'admins supplémentaires :</strong> ajoutez l'identifiant à la variable d'environnement Vercel <code>ADMIN_USERS</code> (ex: <code>admin,sohayb,matrix</code>).
+        Vous pouvez définir vos utilisateurs dans les variables d&#39;environnement Vercel :<br>
+        &bull; <strong>Comptes opérateurs :</strong> <code>AUTHORIZED_USERS</code> (ex: <code>matrix:pass2026</code> ou JSON avec <code>role: &quot;admin&quot;|&quot;operator&quot;</code>).<br>
+        &bull; <strong>Attribution explicite des droits Root Admin :</strong> définissez <code>ADMIN_USERNAME</code> (associé à <code>ADMIN_PASSWORD</code>) ou listez explicitement les administrateurs dans <code>ADMIN_USERS</code>.
       </div>
     </div>
 
@@ -1047,18 +1366,30 @@ function renderAdminDashboard(adminUser, usersMap) {
         <h2>⚡ CONFIGURATION DES ALERTES (DISCORD &amp; TELEGRAM)</h2>
       </div>
       <div class="guide-box">
-        Vous pouvez configurer les alertes de <strong>deux façons simples</strong> :<br><br>
-        <strong>Méthode 1 : Fichier local <code>alerts.json</code> (Le plus rapide)</strong><br>
-        Ouvrez <code>alerts.json</code> dans le dossier du projet et collez directement votre webhook :<br>
-        <code>{"discord_webhook_url": "https://discord.com/api/webhooks/...", "telegram_bot_token": "...", "telegram_chat_id": "..."}</code><br><br>
-        <strong>Méthode 2 : Variables Vercel</strong><br>
+        Configurez les alertes via les <strong>variables d&#39;environnement Vercel</strong> :<br><br>
         Ajoutez <code>DISCORD_WEBHOOK_URL</code> ou <code>TELEGRAM_BOT_TOKEN</code> + <code>TELEGRAM_CHAT_ID</code> dans <strong>Vercel &rarr; Settings &rarr; Environment Variables</strong>, puis cliquez sur <strong>Redeploy</strong>.
       </div>
     </div>
   </div>
 
+  <script id="geoint-admin-users" type="application/json">${safeAdminUsersJson}</script>
+  <script id="geoint-initial-logs" type="application/json">${safeServerLogsJson}</script>
   <script>
     var localLogHistory = [];
+    var authorizedAdminSet = new Set();
+
+    // 0. Load server-authoritative admin list
+    try {
+      var adminUsersEl = document.getElementById("geoint-admin-users");
+      var parsedAdmins = adminUsersEl && adminUsersEl.textContent ? JSON.parse(adminUsersEl.textContent) : [];
+      if (Array.isArray(parsedAdmins)) {
+        parsedAdmins.forEach(function(u) {
+          if (typeof u === "string" && u) authorizedAdminSet.add(u);
+        });
+      }
+    } catch(e) {
+      console.warn("Admin list parse notice:", e);
+    }
 
     // 1. Safely load persistent logs from localStorage with array/object validation
     try {
@@ -1074,9 +1405,10 @@ function renderAdminDashboard(adminUser, usersMap) {
       localLogHistory = [];
     }
 
-    // 2. Safely merge server-rendered logs
+    // 2. Safely parse server-rendered logs from non-executable JSON container
     try {
-      var serverLogs = ${JSON.stringify(ACCESS_LOGS)} || [];
+      var initEl = document.getElementById("geoint-initial-logs");
+      var serverLogs = initEl && initEl.textContent ? JSON.parse(initEl.textContent) : [];
       if (Array.isArray(serverLogs)) {
         var mergeMap = new Map();
         serverLogs.forEach(function(item) {
@@ -1088,7 +1420,9 @@ function renderAdminDashboard(adminUser, usersMap) {
         localLogHistory.forEach(function(item) {
           if (item && typeof item === "object") {
             var key = item.id || (String(item.timestamp) + "_" + String(item.user));
-            mergeMap.set(key, item);
+            if (!mergeMap.has(key)) {
+              mergeMap.set(key, item);
+            }
           }
         });
         localLogHistory = Array.from(mergeMap.values()).sort(function(a, b) {
@@ -1107,27 +1441,87 @@ function renderAdminDashboard(adminUser, usersMap) {
 
         if (!logs || !Array.isArray(logs) || logs.length === 0) {
           if (counter) counter.textContent = "0 SESSIONS";
+          if (tbody) {
+            while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+            var emptyTr = document.createElement("tr");
+            var emptyTd = document.createElement("td");
+            emptyTd.colSpan = 5;
+            emptyTd.style.cssText = "text-align: center; color: #64748b; padding: 25px;";
+            emptyTd.textContent = "📡 Aucun journal de session correspondant.";
+            emptyTr.appendChild(emptyTd);
+            tbody.appendChild(emptyTr);
+          }
           return;
         }
 
         if (counter) counter.textContent = logs.length + " SESSIONS";
 
         if (tbody) {
-          tbody.innerHTML = logs.map(function(l) {
-            if (!l) return "";
+          while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+          var frag = document.createDocumentFragment();
+
+          logs.forEach(function(l) {
+            if (!l || typeof l !== "object") return;
             var d = new Date(l.timestamp || Date.now());
             var dateStr = d.toLocaleDateString() + " " + d.toLocaleTimeString();
-            var flag = l.country && l.country !== "XX" ? " [" + l.country + "]" : "";
-            var isAdmin = Boolean(l.isAdmin || l.user === "admin" || l.user === "elmakhchounix" || l.user === "sohayb");
+            var countryStr = l.country ? String(l.country) : "XX";
+            var flag = countryStr !== "XX" ? " [" + countryStr + "]" : "";
+            var isAdmin = Boolean(l && typeof l.user === "string" && authorizedAdminSet.has(l.user));
             var roleSub = isAdmin ? "👑 NIVEAU 1 // ROOT" : "🛡️ NIVEAU 2 // OPÉRATEUR";
-            return "<tr>" +
-              "<td><strong>" + dateStr + "</strong><br><span style=\"font-size:10px;color:#64748b;\">" + (l.timestamp || "") + "</span></td>" +
-              "<td><span class=\"badge-user " + (isAdmin ? "badge-admin" : "") + "\">" + (isAdmin ? "&#128081; " : "&#128737;&#65039; ") + (l.user || "ANONYME") + "</span><br><span style=\"font-size:10px;font-weight:bold;color:" + (isAdmin ? "#fca5a5" : "#86efac") + ";\">" + roleSub + "</span></td>" +
-              "<td><code style=\"color:#38bdf8;\">" + (l.ip || "Direct") + "</code></td>" +
-              "<td>" + (l.city && l.city !== "Unknown" ? l.city + ", " : "") + (l.country || "XX") + flag + "</td>" +
-              "<td style=\"font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;\">" + (l.userAgent || "N/A") + "</td>" +
-            "</tr>";
-          }).join("");
+
+            var tr = document.createElement("tr");
+
+            // Col 1: Timestamp
+            var tdTime = document.createElement("td");
+            var strongDate = document.createElement("strong");
+            strongDate.textContent = dateStr;
+            var brTime = document.createElement("br");
+            var spanIso = document.createElement("span");
+            spanIso.style.cssText = "font-size:10px;color:#64748b;";
+            spanIso.textContent = String(l.timestamp || "");
+            tdTime.appendChild(strongDate);
+            tdTime.appendChild(brTime);
+            tdTime.appendChild(spanIso);
+            tr.appendChild(tdTime);
+
+            // Col 2: Operator & Role
+            var tdUser = document.createElement("td");
+            var spanBadge = document.createElement("span");
+            spanBadge.className = "badge-user" + (isAdmin ? " badge-admin" : "");
+            spanBadge.textContent = (isAdmin ? "👑 " : "🛡️ ") + String(l.user || "ANONYME");
+            var brUser = document.createElement("br");
+            var spanRole = document.createElement("span");
+            spanRole.style.cssText = "font-size:10px;font-weight:bold;color:" + (isAdmin ? "#fca5a5" : "#86efac") + ";";
+            spanRole.textContent = roleSub;
+            tdUser.appendChild(spanBadge);
+            tdUser.appendChild(brUser);
+            tdUser.appendChild(spanRole);
+            tr.appendChild(tdUser);
+
+            // Col 3: IP
+            var tdIp = document.createElement("td");
+            var codeIp = document.createElement("code");
+            codeIp.style.color = "#38bdf8";
+            codeIp.textContent = String(l.ip || "Direct");
+            tdIp.appendChild(codeIp);
+            tr.appendChild(tdIp);
+
+            // Col 4: Location
+            var tdLoc = document.createElement("td");
+            var cityPrefix = (l.city && l.city !== "Unknown") ? (String(l.city) + ", ") : "";
+            tdLoc.textContent = cityPrefix + countryStr + flag;
+            tr.appendChild(tdLoc);
+
+            // Col 5: User-Agent
+            var tdUa = document.createElement("td");
+            tdUa.style.cssText = "font-size:11px;color:#94a3b8;max-width:300px;word-break:break-all;";
+            tdUa.textContent = String(l.userAgent || "N/A");
+            tr.appendChild(tdUa);
+
+            frag.appendChild(tr);
+          });
+
+          tbody.appendChild(frag);
         }
       } catch(renderErr) {
         console.error("Render error:", renderErr);
@@ -1145,6 +1539,14 @@ function renderAdminDashboard(adminUser, usersMap) {
         if (!res.ok) return;
         var data = await res.json();
         if (!data || !Array.isArray(data.logs)) return;
+
+        if (Array.isArray(data.registeredUsers)) {
+          authorizedAdminSet = new Set(
+            data.registeredUsers
+              .filter(function(u) { return u && u.isAdmin === true && typeof u.username === "string"; })
+              .map(function(u) { return u.username; })
+          );
+        }
         
         var map = new Map();
         data.logs.forEach(function(item) {
@@ -1156,7 +1558,9 @@ function renderAdminDashboard(adminUser, usersMap) {
         localLogHistory.forEach(function(item) {
           if (item && typeof item === "object") {
             var key = item.id || (String(item.timestamp) + "_" + String(item.user));
-            map.set(key, item);
+            if (!map.has(key)) {
+              map.set(key, item);
+            }
           }
         });
         
@@ -1176,10 +1580,10 @@ function renderAdminDashboard(adminUser, usersMap) {
       if (!q) { renderTable(localLogHistory); return; }
       var filtered = localLogHistory.filter(function(l) { 
         if (!l) return false;
-        return (l.user && l.user.toLowerCase().includes(q)) ||
-          (l.ip && l.ip.toLowerCase().includes(q)) ||
-          (l.country && l.country.toLowerCase().includes(q)) ||
-          (l.city && l.city.toLowerCase().includes(q));
+        return (l.user && String(l.user).toLowerCase().includes(q)) ||
+          (l.ip && String(l.ip).toLowerCase().includes(q)) ||
+          (l.country && String(l.country).toLowerCase().includes(q)) ||
+          (l.city && String(l.city).toLowerCase().includes(q));
       });
       renderTable(filtered);
     }
@@ -1200,7 +1604,7 @@ function renderAdminDashboard(adminUser, usersMap) {
         if (data.success) {
           alert("Alerte test envoyee avec succes ! Regardez dans votre salon Discord.");
         } else {
-          alert("Impossible d'envoyer l'alerte sur Discord. Verifiez l'URL de votre webhook dans alerts.json.");
+          alert("Impossible d'envoyer l'alerte sur Discord. Verifiez la configuration de votre webhook.");
         }
       } catch (e) {
         alert("Erreur lors de l'envoi du test : " + e);
@@ -1216,3 +1620,4 @@ function renderAdminDashboard(adminUser, usersMap) {
 </body>
 </html>`;
 }
+
